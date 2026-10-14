@@ -1415,6 +1415,15 @@ async function setCardDuration(secs) {
     <div id="unify-result" style="margin-top:12px;font-size:14px;"></div>
   </div>
 
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;">
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px;">📇 حفظ الزبائن في Contacts</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">يجهّز ملفاً فيه الزبائن بصيغة "ID الاسم" فتحفظهم دفعة واحدة. اختر تاريخاً حتى لا تتكرر الأسماء المحفوظة.</div>
+    <button onclick="exportContactsVcf()" style="width:100%;padding:14px;background:linear-gradient(180deg,#1a3050,#0d1e30);border:1px solid var(--accent);border-radius:12px;box-shadow:0 4px 0 #020810;color:#fff;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;cursor:pointer;">
+      📇 تجهيز ملف جهات الاتصال
+    </button>
+    <div id="vcf-result" style="margin-top:12px;font-size:14px;"></div>
+  </div>
+
   <div style="background:rgba(255,184,48,0.08);border:1px solid rgba(255,184,48,0.2);border-radius:12px;padding:14px;">
     <div style="font-size:12px;color:var(--warn);">⚠️ <strong>Tip:</strong> Gem backup regelmæssigt — f.eks. hver uge — for at beskytte dine data!</div>
   </div>
@@ -3228,6 +3237,7 @@ function openModal(id) {
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.855L0 24l6.335-1.502A11.948 11.948 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.006-1.371l-.36-.214-3.732.885.916-3.618-.234-.373A9.818 9.818 0 1 1 12 21.818z"/></svg>
           </button>
           <button onclick="triggerPhotoUpload()" style="width:42px;height:42px;background:linear-gradient(180deg,#7c3aed,#5b21b6);border:none;border-bottom:4px solid #2e1065;border-radius:50%;color:#fff;font-size:22px;cursor:pointer;flex-shrink:0;">📷</button>
+          <button onclick="saveContactVcf(currentModalId)" title="Gem i Kontakter" style="width:42px;height:42px;background:linear-gradient(180deg,#0ea5e9,#0369a1);border:none;border-bottom:4px solid #0c4a6e;border-radius:50%;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;">📇</button>
           <input type="file" id="photo-upload-input" accept="image/*" style="display:none;" onchange="handlePhotoUpload(this)">
           <button onclick="markNoShowById(currentModalId);openModal(currentModalId)" style="flex:1;height:42px;background:linear-gradient(180deg,#7a0a1a,#4a0510);border:1px solid rgba(255,79,110,0.5);border-bottom:4px solid #2a0008;border-radius:8px;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">❌ Kom ikke</button>
           <button onclick="markVisitById(currentModalId);openModal(currentModalId)" style="flex:1;height:42px;background:linear-gradient(180deg,#0a5a2a,#063d1a);border:1px solid rgba(0,200,100,0.5);border-bottom:4px solid #021a08;border-radius:8px;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">✅ Besøg</button>
@@ -3613,6 +3623,46 @@ function normalizePhone(raw) {
   if (digits.length === 8) return { value: '+45' + digits, ok: true };
   if (digits.length === 10 && digits.startsWith('45')) return { value: '+' + digits, ok: true };
   return { value: orig, ok: false };
+}
+
+// 📇 حفظ الزبائن في Contacts عبر ملف vCard (.vcf) — الاسم بصيغة "ID Name"
+function vcfEsc(t) { return String(t == null ? '' : t).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); }
+function customerToVcard(c) {
+  const ph = normalizePhone(c.phone);
+  if (!ph.ok || !ph.value) return null;
+  const full = ((c.idNum ? c.idNum + ' ' : '') + (c.name || '')).trim();
+  return 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:' + vcfEsc(full) + '\r\nN:' + vcfEsc(full) + ';;;;\r\nTEL;TYPE=CELL:' + ph.value + '\r\nEND:VCARD\r\n';
+}
+function downloadVcf(text, filename) {
+  const blob = new Blob([text], { type: 'text/vcard;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function saveContactVcf(id) {
+  const c = customers.find(x => x.id === id);
+  if (!c) { showToast('⚠️ Kunde ikke fundet'); return; }
+  const v = customerToVcard(c);
+  if (!v) { showToast('⚠️ رقم غير واضح — صحّحه أولاً'); return; }
+  downloadVcf(v, 'kontakt-' + (c.idNum || c.id) + '.vcf');
+  showToast('📇 افتح الملف ثم اضغط Save في Contacts');
+}
+function exportContactsVcf() {
+  const out = document.getElementById('vcf-result');
+  const from = prompt('تصدير الزبائن المضافين من أي تاريخ؟\nاكتب التاريخ بالصيغة YYYY-MM-DD (مثل 2026-09-01)،\nأو اتركه فارغاً لتصدير الكل (قد يكرر من حفظتهم يدوياً).', '');
+  if (from === null) return;
+  const f = from.trim();
+  let list = customers.slice();
+  if (f) list = list.filter(c => (c.createdAt || '') >= f);
+  let cards = [], skipped = [];
+  list.forEach(c => { const v = customerToVcard(c); if (v) cards.push(v); else skipped.push(c); });
+  if (!cards.length) { out.innerHTML = '⚠️ لا يوجد زبائن مطابقون.'; return; }
+  downloadVcf(cards.join(''), 'lola-kontakter.vcf');
+  let html = '✅ تم تجهيز <b>' + cards.length + '</b> جهة اتصال. افتح الملف من Downloads ثم اضغط Save.';
+  if (skipped.length) html += '<div style="margin-top:8px;color:#ef4444;font-weight:800;">⚠️ تم تخطي ' + skipped.length + ' برقم غير واضح:</div>' + skipped.map(c => '<div>' + (c.idNum || '') + ' ' + c.name + ' — <b>' + (c.phone || '(فارغ)') + '</b></div>').join('');
+  out.innerHTML = html;
 }
 
 function openSMSApp(phone, msg) {
