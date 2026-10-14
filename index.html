@@ -3395,7 +3395,7 @@ Vi glæder os til at se dig til din aftale hos os.
 🗓️ Tid.
 ⏰ Kl. 
 
-Hvis du er forhindret eller ønsker at ændre din tid, bedes du venligst kontakte os senest én time før aftalen.
+Hvis du er forhindret eller ønsker at ændre din tid, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.
 
 Venlig hilsen
 Lola Klip
@@ -3461,7 +3461,7 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
     'Vi glæder os til at se dig til din aftale hos os.\n\n' +
     '🗓️ ' + dayName + ' ' + dateFmt + '\n' +
     '⏰ Kl. ' + timeStr + '\n\n' +
-    'Hvis du er forhindret eller ønsker at ændre din tid, bedes du venligst kontakte os senest én time før aftalen.\n\n' +
+    'Hvis du er forhindret eller ønsker at ændre din tid, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.\n\n' +
     'Mvh. Lola Klip 🌹';
 
   // Smart valg: 1. gang = booking (📩), 2. gang = påmindelse (🔔2)
@@ -3549,7 +3549,7 @@ function triggerAftaleSyg(val, dateKey, timeStr, colSide) {
   const msg =
     'Hej\n' +
     'Det er vi kede af at høre. Vi håber, at du snart får det bedre.\n' +
-    'Du skal ikke tænke på din tid hos os – pas godt på dig selv, og kontakt os bare, når du er klar igen.\n' +
+    'Du skal ikke tænke på din tid hos os – pas godt på dig selv, og ring bare til os på 81 93 51 80, når du er klar igen.\n' +
     'Rigtig god bedring 🌷\n' +
     'Mvh. Lola Klip 🌹';
 
@@ -3738,7 +3738,7 @@ function triggerAftaleAfbud(val, dateKey, timeStr, colSide) {
     'Du har ringet og afmeldt din tid.\n\n' +
     '🗓️ ' + dayName + ' den ' + dateFmt + '\n' +
     '⏰ Kl. ' + timeStr + '\n\n' +
-    'Du er altid velkommen til at bestille en ny tid.\n\n' +
+    'Du er altid velkommen til at bestille en ny tid på 81 93 51 80.\n\n' +
     'Mvh. Lola Klip 🌷';
 
   showAftaleAfbudConfirm({ name: name, phone: phone, id: custId }, msg, dateKey, timeStr, colSide);
@@ -3804,7 +3804,7 @@ function triggerSygSms(id) {
   const msg =
     'Hej\n' +
     'Det er vi kede af at høre. Vi håber, at du snart får det bedre.\n' +
-    'Du skal ikke tænke på din tid hos os – pas godt på dig selv, og kontakt os bare, når du er klar igen.\n' +
+    'Du skal ikke tænke på din tid hos os – pas godt på dig selv, og ring bare til os på 81 93 51 80, når du er klar igen.\n' +
     'Rigtig god bedring 🌷\n' +
     'Mvh. Lola Klip 🌹';
 
@@ -5177,7 +5177,7 @@ function saveTbNote(codeEnc, phoneEnc){
 
 function tbCardHTML(en){
   const stars = en.rating ? '\u2B50'.repeat(en.rating) : '';
-  const tbReminder = 'Hej ' + (en.name || '') + ' 😊\n\nVi glæder os til at se dig til din aftale hos os.\n\n🗓️ Tid.\n⏰ Kl. \n\nHvis du er forhindret eller ønsker at ændre din tid, bedes du venligst kontakte os senest én time før aftalen.\n\nVenlig hilsen\nLola Klip\nLola haircut salon';
+  const tbReminder = 'Hej ' + (en.name || '') + ' 😊\n\nVi glæder os til at se dig til din aftale hos os.\n\n🗓️ Tid.\n⏰ Kl. \n\nHvis du er forhindret eller ønsker at ændre din tid, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.\n\nVenlig hilsen\nLola Klip\nLola haircut salon';
   const tbEncMsg = encodeURIComponent(tbReminder);
   const tbKeyCode = encodeURIComponent(en.code||'');
   const tbKeyPhone = encodeURIComponent((en.phones && en.phones[0]) || '');
