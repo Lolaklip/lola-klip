@@ -1908,6 +1908,13 @@ async function downloadSnapshot(key) {
   URL.revokeObjectURL(url);
 }
 
+function snapLabelDate(navn) {
+  const raw = navn.replace(/^(auto-|pre-restore-|guard-)/, '');
+  const m = raw.match(/^(\d{4})-(\d\d)-(\d\d)(?:T(\d\d)-(\d\d)(?:-\d\d)?)?$/);
+  if (!m) return raw;
+  return m[3] + '-' + m[2] + '-' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '');
+}
+
 async function renderSnapshots() {
   const el = document.getElementById('snap-list');
   if (!el) return;
@@ -1917,7 +1924,7 @@ async function renderSnapshots() {
     const navn = r.key.replace(SNAP_PREFIX,'');
     const type = navn.indexOf('auto-')===0 ? '🗓️ Dagligt' : navn.indexOf('pre-restore-')===0 ? '🛟 Før gendan' : '🛡️ Beskyttelse';
     return '<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--border);">' +
-      '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;">' + type + ' ' + navn.replace(/^(auto-|pre-restore-|guard-)/,'').replace('T',' ').replace(/-(\d\d)-(\d\d)$/,':$1') + '</div>' +
+      '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;">' + type + ' ' + snapLabelDate(navn) + '</div>' +
       '<div style="font-size:12px;color:var(--muted);">' + (r.nCust||0) + ' kunder · ' + (r.nDays||0) + ' aftale-dage · ' + (r.nTel||0) + ' tlf.bog</div></div>' +
       '<button onclick="restoreSnapshot(\'' + r.key + '\')" style="padding:10px 12px;background:#1a3050;border:1px solid var(--accent);border-radius:10px;color:#fff;font-weight:800;cursor:pointer;">Gendan</button>' +
       '<button onclick="downloadSnapshot(\'' + r.key + '\')" style="padding:10px 12px;background:#0d1e30;border:1px solid var(--border);border-radius:10px;color:#fff;font-weight:800;cursor:pointer;">⬇️</button>' +
