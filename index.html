@@ -1316,7 +1316,7 @@ async function setCardDuration(secs) {
 
   <!-- لوحة البحث العائمة (Aftaler) -->
   <div id="aftale-search-wrap" style="display:none;position:fixed;top:120px;right:150px;z-index:9998;background:#1a2a40;border:2px solid #00e5b0;border-radius:14px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);width:420px;max-width:92vw;">
-    <div id="aftale-search-handle" style="cursor:move;touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;background:rgba(0,229,176,0.22);border-radius:10px;padding:6px 10px;">
+    <div id="aftale-search-handle" style="cursor:move;touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;background:rgba(0,229,176,0.22);border-radius:10px;padding:12px 12px;min-height:34px;">
       <span style="color:#00e5b0;font-size:14px;font-weight:900;letter-spacing:1px;">⠿ Søg kunde</span>
       <button onclick="toggleAftaleSearch()" style="background:#ef4444;border:none;border-radius:8px;color:#fff;width:30px;height:30px;font-size:16px;font-weight:900;cursor:pointer;">✕</button>
     </div>
@@ -1422,6 +1422,12 @@ async function setCardDuration(secs) {
       📇 تجهيز ملف جهات الاتصال
     </button>
     <div id="vcf-result" style="margin-top:12px;font-size:14px;"></div>
+  </div>
+
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;">
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px;">🛟 Automatiske sikkerhedskopier</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Gemmes i browseren hver dag og før hver gendannelse. Gendan fletter — sletter aldrig.</div>
+    <div id="snap-list"></div>
   </div>
 
   <div style="background:rgba(255,184,48,0.08);border:1px solid rgba(255,184,48,0.2);border-radius:12px;padding:14px;">
@@ -1684,7 +1690,8 @@ const LOLA_MIRROR_KEYS = [
   'lola_stats_code',      // رمز الإحصائيات
   'lola-pin',             // رمز القفل
   'lola_fastgjort',       // الرقم المثبّت
-  'lola_fastgjort_pos'    // موضع الشارة
+  'lola_fastgjort_pos',   // موضع الشارة
+  'lola_last_export'      // تاريخ آخر Backup
 ];
 
 // كتابة نسخة في الخزنة (IndexedDB → settings). صامتة، لا تعطّل شيئاً.
@@ -1741,11 +1748,201 @@ async function restoreMirrors() {
 })();
 
 // ══════════════════════════════════════════
+//  SIKKERHED x91 — لا شيء يختفي بعد اليوم
+//  1) طلب تخزين دائم من Chrome  2) نسخة تلقائية يومية داخل المتصفح
+//  3) نسخة أمان قبل أي استعادة  4) الاستعادة تدمج ولا تستبدل ولا تحذف
+// ══════════════════════════════════════════
+const SNAP_PREFIX = 'snap::';
+const SNAP_LIMITS = { 'auto-': 10, 'pre-restore-': 10, 'guard-': 10 };
+
+function snapStamp() {
+  const n = new Date(), z = x => String(x).padStart(2,'0');
+  return n.getFullYear()+'-'+z(n.getMonth()+1)+'-'+z(n.getDate())+'T'+z(n.getHours())+'-'+z(n.getMinutes())+'-'+z(n.getSeconds());
+}
+
+function snapList() {
+  return new Promise(res => {
+    try {
+      const req = db.transaction('settings','readonly').objectStore('settings').getAll();
+      req.onsuccess = () => res((req.result || [])
+        .filter(r => typeof r.key === 'string' && r.key.indexOf(SNAP_PREFIX) === 0)
+        .sort((a,b) => a.key < b.key ? 1 : -1));
+      req.onerror = () => res([]);
+    } catch(e) { res([]); }
+  });
+}
+
+async function snapshotAll(label, aftOverride) {
+  try {
+    let aft = aftOverride || {};
+    if (!aftOverride) { try { aft = JSON.parse(localStorage.getItem('lola_aftaler_v2') || '{}'); } catch(e) {} }
+    const cust = await dbGetAll();
+    const snap = { version: 3, date: new Date().toISOString(), customers: cust, aftaler: aft, telefonbog: loadTelefonbog() };
+    await new Promise((res, rej) => {
+      const tx = db.transaction('settings','readwrite');
+      tx.objectStore('settings').put({ key: SNAP_PREFIX + label, value: JSON.stringify(snap), date: snap.date,
+        nCust: cust.length, nDays: Object.keys(aft).length, nTel: snap.telefonbog.length });
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+    await pruneSnapshots();
+    return true;
+  } catch(e) { console.error('snapshot fejl', e); return false; }
+}
+
+async function pruneSnapshots() {
+  const all = await snapList();
+  for (const pre in SNAP_LIMITS) {
+    const mine = all.filter(r => r.key.indexOf(SNAP_PREFIX + pre) === 0);
+    for (const r of mine.slice(SNAP_LIMITS[pre])) {
+      await new Promise(res => {
+        const tx = db.transaction('settings','readwrite');
+        tx.objectStore('settings').delete(r.key); tx.oncomplete = res; tx.onerror = res;
+      });
+    }
+  }
+}
+
+async function autoSnapshot() {
+  try {
+    const label = 'auto-' + aftalerDateKey(new Date());
+    const list = await snapList();
+    if (list.some(r => r.key === SNAP_PREFIX + label)) return;
+    const cust = await dbGetAll();
+    if (cust.length === 0) return;            // لا نحفظ نسخة فارغة
+    await snapshotAll(label);
+  } catch(e) {}
+}
+
+async function requestPersistentStorage() {
+  try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch(e) {}
+}
+
+// دمج آمن: لا يحذف ولا ينقص أي بيانات حالية
+async function mergeBackup(raw) {
+  let list = null;
+  if (Array.isArray(raw)) list = raw;
+  else if (raw && Array.isArray(raw.customers)) list = raw.customers;
+  else if (raw && Array.isArray(raw.data)) list = raw.data;
+  else if (raw && typeof raw === 'object') {
+    for (const k of Object.keys(raw)) if (Array.isArray(raw[k]) && raw[k].length > 0) { list = raw[k]; break; }
+  }
+  if (!list) throw new Error('Ugyldig fil');
+
+  const sum = { newCust: 0, updCust: 0, newDays: 0, newSlots: 0, newTel: 0 };
+
+  // الزبائن: نضيف الجدد، وللموجودين نُبقي الأغنى (زيارات أكثر ثم ملاحظات أطول)
+  const cur = await dbGetAll();
+  const map = new Map(cur.map(c => [String(c.id), c]));
+  const rich = c => [Array.isArray(c.visitHistory) ? c.visitHistory.length : 0, String(c.notes || '').length];
+  for (const c of list) {
+    if (!c || !(c.id || c.name)) continue;
+    const ex = map.get(String(c.id));
+    if (!ex) { await dbPut(c); sum.newCust++; continue; }
+    const a = rich(c), b = rich(ex);
+    if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) { await dbPut(c); sum.updCust++; }
+  }
+
+  // المواعيد: ندمج اليوم واليوم، والخانة بالخانة. عند التعارض تبقى الحالية
+  if (raw && raw.aftaler && typeof raw.aftaler === 'object' && !Array.isArray(raw.aftaler)) {
+    const now = JSON.parse(localStorage.getItem('lola_aftaler_v2') || '{}');
+    for (const day of Object.keys(raw.aftaler)) {
+      if (!now[day]) { now[day] = raw.aftaler[day]; sum.newDays++; continue; }
+      for (const slot of Object.keys(raw.aftaler[day] || {})) {
+        if (!(slot in now[day])) { now[day][slot] = raw.aftaler[day][slot]; sum.newSlots++; }
+      }
+    }
+    localStorage.setItem('lola_aftaler_v2', JSON.stringify(now));
+  }
+
+  // دفتر الهاتف: نضيف الجدد بحسب الرمز، وللموجود نُبقي الملاحظة الأطول
+  if (raw && Array.isArray(raw.telefonbog)) {
+    const tb = loadTelefonbog();
+    const idx = new Map(tb.map((e, i) => [String(e.code), i]));
+    for (const e of raw.telefonbog) {
+      const i = idx.get(String(e.code));
+      if (i === undefined) { tb.push(e); sum.newTel++; }
+      else if (String(e.note || '').length > String(tb[i].note || '').length) tb[i] = e;
+    }
+    saveTelefonbog(tb);
+    renderTelefonbogStatus();
+  }
+
+  customers = await dbGetAll();
+  customers.sort((a,b) => b.id - a.id);
+  renderList();
+  return sum;
+}
+
+function backupSummary(raw) {
+  const n = Array.isArray(raw) ? raw.length : (raw && Array.isArray(raw.customers) ? raw.customers.length : 0);
+  const d = raw && raw.aftaler && typeof raw.aftaler === 'object' ? Object.keys(raw.aftaler).length : 0;
+  const t = raw && Array.isArray(raw.telefonbog) ? raw.telefonbog.length : 0;
+  const dt = raw && raw.date ? String(raw.date).slice(0,16).replace('T',' ') : 'ukendt dato';
+  return dt + ' — ' + n + ' kunder, ' + d + ' aftale-dage, ' + t + ' tlf.bog';
+}
+
+async function runRestore(raw, kildeTekst) {
+  const ok = confirm('Gendan fra: ' + kildeTekst + '\n\nINGEN data bliver slettet. Filen flettes ind i dine nuværende data, og en sikkerhedskopi gemmes først.\n\nFortsæt?');
+  if (!ok) return;
+  await snapshotAll('pre-restore-' + snapStamp());
+  const r = await mergeBackup(raw);
+  showToast('✅ Flettet: +' + r.newCust + ' kunder, ' + r.updCust + ' opdateret, +' + r.newDays + ' dage, +' + r.newSlots + ' aftaler, +' + r.newTel + ' tlf.bog');
+  renderSnapshots();
+}
+
+async function restoreSnapshot(key) {
+  const list = await snapList();
+  const rec = list.find(r => r.key === key);
+  if (!rec) return;
+  try { await runRestore(JSON.parse(rec.value), backupSummary(JSON.parse(rec.value))); }
+  catch(e) { showToast('⚠️ Fejl: ' + e.message); }
+}
+
+async function downloadSnapshot(key) {
+  const list = await snapList();
+  const rec = list.find(r => r.key === key);
+  if (!rec) return;
+  const url = URL.createObjectURL(new Blob([rec.value], {type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'lola-backup-' + key.replace(SNAP_PREFIX,'') + '.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function renderSnapshots() {
+  const el = document.getElementById('snap-list');
+  if (!el) return;
+  const list = await snapList();
+  if (!list.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted);">Ingen endnu — den første oprettes automatisk i dag.</div>'; return; }
+  el.innerHTML = list.map(r => {
+    const navn = r.key.replace(SNAP_PREFIX,'');
+    const type = navn.indexOf('auto-')===0 ? '🗓️ Dagligt' : navn.indexOf('pre-restore-')===0 ? '🛟 Før gendan' : '🛡️ Beskyttelse';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--border);">' +
+      '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;">' + type + ' ' + navn.replace(/^(auto-|pre-restore-|guard-)/,'').replace('T',' ').replace(/-(\d\d)-(\d\d)$/,':$1') + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);">' + (r.nCust||0) + ' kunder · ' + (r.nDays||0) + ' aftale-dage · ' + (r.nTel||0) + ' tlf.bog</div></div>' +
+      '<button onclick="restoreSnapshot(\'' + r.key + '\')" style="padding:10px 12px;background:#1a3050;border:1px solid var(--accent);border-radius:10px;color:#fff;font-weight:800;cursor:pointer;">Gendan</button>' +
+      '<button onclick="downloadSnapshot(\'' + r.key + '\')" style="padding:10px 12px;background:#0d1e30;border:1px solid var(--border);border-radius:10px;color:#fff;font-weight:800;cursor:pointer;">⬇️</button>' +
+      '</div>';
+  }).join('');
+}
+
+function backupAgeWarning() {
+  try {
+    const t = parseInt(localStorage.getItem('lola_last_export') || '0', 10);
+    const dage = t ? Math.floor((Date.now() - t) / 86400000) : null;
+    if (dage === null || dage >= 2) {
+      setTimeout(() => showToast(dage === null ? '⚠️ Husk backup til Drive (ingen registreret endnu)' : '⚠️ Sidste backup er ' + dage + ' dage gammel — tag en ny!'), 1500);
+    }
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
 (async () => {
   db = await openDB();
   await restoreMirrors();   // 🛡️ استعادة أي بيانات ضاعت من الكاش، قبل عرض أي شيء
+  requestPersistentStorage();   // 🛡️ x91: تخزين دائم
+  await autoSnapshot();          // 🛡️ x91: نسخة يومية تلقائية قبل أي تعديل
   customers = await dbGetAll();
   customers.sort((a,b) => b.id - a.id);
 
@@ -1778,6 +1975,8 @@ async function restoreMirrors() {
 
   renderList();
   renderTelefonbogStatus();
+  renderSnapshots();
+  backupAgeWarning();
   buildDKKeyboard('dk-keys-search', 'typeSearch');
 
   // تم إيقاف نظام الصوت
@@ -4486,6 +4685,8 @@ function editorHtmlToNotes(el){
 
 // حفظ آخر تحديد داخل الخانة
 let nfmtSavedRange = null;
+let nfmtLastRange = null;
+let nfmtLastRangeT = 0;
 let nfmtSizeSpan = null;
 let nfmtActiveEditor = null;
 let nfmtActiveSpan = null;
@@ -4496,7 +4697,7 @@ document.addEventListener('selectionchange', function(){
   let n = r.commonAncestorContainer;
   n = (n.nodeType===1 ? n : n.parentNode);
   const ed = (n && n.closest) ? n.closest('.nfmt-editable') : null;
-  if(ed){ nfmtActiveEditor = ed; nfmtSavedRange = r.cloneRange(); }
+  if(ed){ nfmtActiveEditor = ed; nfmtSavedRange = r.cloneRange(); if(!r.collapsed && r.toString().trim()){ nfmtLastRange = r.cloneRange(); nfmtLastRangeT = Date.now(); } }
 });
 
 // بعد أي كتابة: إن انتهى النمط النشط بمسافة، أغلقه وأخرج المسافة منه لتعود الكتابة عادية (كل كلمة مستقلة)
@@ -4527,7 +4728,13 @@ document.addEventListener('input', function(e){
 function nfmtEnsureRun(){
   const ed = nfmtActiveEditor;
   if(!ed) return null;
-  const range = nfmtSavedRange;
+  let range = nfmtSavedRange;
+  if((!range || range.collapsed) && nfmtLastRange && (Date.now()-nfmtLastRangeT) < 60000){
+    try{
+      const ca = nfmtLastRange.commonAncestorContainer;
+      if(ca && ca.isConnected && ed.contains(ca) && nfmtLastRange.toString().trim()){ range = nfmtLastRange.cloneRange(); }
+    }catch(_){}
+  }
   if(!range || range.collapsed){ return nfmtGetOrCreateCaretSpan(); }
   const anc = range.commonAncestorContainer;
   const parent = (anc.nodeType===1 ? anc : anc.parentNode);
@@ -4544,6 +4751,7 @@ function nfmtEnsureRun(){
   const nr = document.createRange(); nr.selectNodeContents(span);
   const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(nr);
   nfmtSavedRange = nr.cloneRange();
+  nfmtLastRange = null;
   return span;
 }
 
@@ -4570,10 +4778,25 @@ function nfmtGetOrCreateCaretSpan(){
   return span;
 }
 
+let nfmtPersistT = null;
+function nfmtPersist(){
+  clearTimeout(nfmtPersistT);
+  nfmtPersistT = setTimeout(function(){
+    try{
+      const ed = nfmtActiveEditor;
+      if(ed && ed.isConnected && /^qnote-\d+$/.test(ed.id)){
+        const id = parseInt(ed.id.slice(6),10);
+        const c = customers.find(x => x.id === id);
+        if(c){ c.quickNote = editorHtmlToNotes(ed); dbPut(c); }
+      }
+    }catch(_){}
+  }, 350);
+}
 function nfmtApplyColor(key){
   const span = nfmtEnsureRun(); if(!span) return;
   span.dataset.c = key;
   span.style.color = NFMT_COLORS[key] || '';
+  nfmtPersist();
 }
 
 function nfmtApplyReset(){
@@ -4604,6 +4827,7 @@ function nfmtApplyReset(){
   }
   nfmtSizeSpan = null;
   nfmtActiveSpan = null;
+  nfmtPersist();
 }
 
 // الساحبة: التقاط الكلمة/المؤشر عند بدء السحب
@@ -4620,6 +4844,7 @@ function nfmtSizeInput(v){
   const val = parseFloat(v);
   nfmtSizeSpan.dataset.s = (val===1 ? '' : String(val));
   nfmtSizeSpan.style.fontSize = val + 'em';
+  nfmtPersist();
 }
 
 // شريط الأدوات العائم فوق الخانة
@@ -4821,7 +5046,7 @@ async function saveEditCustomer() {
 
   const newName  = document.getElementById('edit-name').value.trim();
   const newId    = document.getElementById('edit-id').value.trim();
-  const newPhone = normalizePhone(document.getElementById('edit-phone').value).value;
+  const newPhone = document.getElementById('edit-phone').value.trim();
   const newDate  = document.getElementById('edit-date').value;
   const newNotes = editorHtmlToNotes(document.getElementById('edit-notes')).trim();
 
@@ -4945,10 +5170,11 @@ async function exportBackup() {
   a.download = `lola-backup-${dd}-${mm}-${yyyy}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  try { localStorage.setItem('lola_last_export', String(Date.now())); } catch(e) {}
   showToast('✅ Backup gemt!');
 }
 
-// ── Backup Import ──
+// ── Backup Import (x91: fletter, sletter aldrig) ──
 async function importBackup(input) {
   const file = input.files[0];
   if (!file) return;
@@ -4956,45 +5182,7 @@ async function importBackup(input) {
   reader.onload = async (e) => {
     try {
       const raw = JSON.parse(e.target.result);
-      // Support all formats: array, {customers:[]}, {version,customers:[]}, etc.
-      let list = null;
-      if (Array.isArray(raw)) {
-        list = raw;
-      } else if (raw && Array.isArray(raw.customers)) {
-        list = raw.customers;
-      } else if (raw && Array.isArray(raw.data)) {
-        list = raw.data;
-      } else {
-        // Try to find any array in the object
-        for (const key of Object.keys(raw)) {
-          if (Array.isArray(raw[key]) && raw[key].length > 0) {
-            list = raw[key];
-            break;
-          }
-        }
-      }
-      if (!list || !Array.isArray(list)) throw new Error('Ugyldig fil');
-
-      for (const c of list) {
-        if (c && (c.id || c.name)) await dbPut(c);
-      }
-      customers = await dbGetAll();
-      customers.sort((a,b) => b.id - a.id);
-      renderList();
-      // Gendan aftaler hvis de findes i backup-filen
-      let aftalerMsg = '';
-      if (raw && raw.aftaler && typeof raw.aftaler === 'object') {
-        localStorage.setItem('lola_aftaler_v2', JSON.stringify(raw.aftaler));
-        const antalDage = Object.keys(raw.aftaler).length;
-        aftalerMsg = ' + ' + antalDage + ' aftale-dage';
-      }
-      let telMsg = '';
-      if (raw && Array.isArray(raw.telefonbog)) {
-        saveTelefonbog(raw.telefonbog);
-        renderTelefonbogStatus();
-        telMsg = ' + ' + raw.telefonbog.length + ' tlf.bog';
-      }
-      showToast('✅ ' + list.length + ' kunder' + aftalerMsg + telMsg + ' gendannet!');
+      await runRestore(raw, file.name + '\n' + backupSummary(raw));
       switchTab('list');
     } catch(err) {
       console.error('Import error:', err);
@@ -5443,6 +5631,12 @@ function loadAftalerData() {
 }
 
 function saveAftalerData(data) {
+  // 🛡️ x91: إن كانت الكتابة ستُنقص أيام المواعيد بشكل كبير، نحفظ النسخة السابقة أولاً
+  try {
+    const prev = JSON.parse(localStorage.getItem('lola_aftaler_v2') || '{}');
+    const pd = Object.keys(prev).length, nd = Object.keys(data || {}).length;
+    if (pd >= 5 && nd < pd * 0.5) snapshotAll('guard-' + snapStamp(), prev);
+  } catch(e) {}
   localStorage.setItem('lola_aftaler_v2', JSON.stringify(data));
 }
 
@@ -5517,26 +5711,48 @@ function initFloatDrag(wrap, handle){
   if(!wrap || !handle || handle._dragReady) return;
   handle._dragReady = true;
   let dragging=false, sx=0, sy=0, sl=0, st=0;
-  handle.addEventListener('pointerdown', function(e){
+  function pt(e){ const t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; return {x:t.clientX,y:t.clientY}; }
+  function start(e){
+    if(e.target && e.target.closest && e.target.closest('button,input,select,a')) return;
+    const p=pt(e);
     dragging=true;
     const r=wrap.getBoundingClientRect();
-    sl=r.left; st=r.top; sx=e.clientX; sy=e.clientY;
-    wrap.style.left=sl+'px'; wrap.style.top=st+'px'; wrap.style.right='auto';
-    try{ handle.setPointerCapture(e.pointerId); }catch(_){}
-    e.preventDefault();
-  });
-  handle.addEventListener('pointermove', function(e){
+    sl=r.left; st=r.top; sx=p.x; sy=p.y;
+    wrap.style.left=sl+'px'; wrap.style.top=st+'px'; wrap.style.right='auto'; wrap.style.bottom='auto';
+    window.addEventListener('pointermove', move, {passive:false});
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    window.addEventListener('touchmove', move, {passive:false});
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    if(e.cancelable) e.preventDefault();
+  }
+  function move(e){
     if(!dragging) return;
-    let nl=sl+(e.clientX-sx), nt=st+(e.clientY-sy);
+    const p=pt(e);
+    let nl=sl+(p.x-sx), nt=st+(p.y-sy);
     const w=wrap.offsetWidth, h=wrap.offsetHeight;
-    nl=Math.max(0, Math.min(nl, window.innerWidth-w));
-    nt=Math.max(0, Math.min(nt, window.innerHeight-h));
+    const vw=window.innerWidth, vh=window.innerHeight;
+    nl=Math.max(0, Math.min(nl, Math.max(0, vw-w)));
+    nt=Math.max(0, Math.min(nt, Math.max(0, vh-Math.min(h,60))));
     wrap.style.left=nl+'px'; wrap.style.top=nt+'px';
-    e.preventDefault();
-  });
-  function end(e){ dragging=false; try{ handle.releasePointerCapture(e.pointerId); }catch(_){} }
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
+    if(e.cancelable) e.preventDefault();
+  }
+  function end(){
+    dragging=false;
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', end);
+    window.removeEventListener('touchmove', move);
+    window.removeEventListener('touchend', end);
+    window.removeEventListener('touchcancel', end);
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', end);
+  }
+  if(window.PointerEvent){ handle.addEventListener('pointerdown', start); }
+  else { handle.addEventListener('touchstart', start, {passive:false}); handle.addEventListener('mousedown', start); }
 }
 
 // بحث الزبون داخل شاشة Aftaler
