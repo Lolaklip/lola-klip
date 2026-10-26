@@ -2117,8 +2117,11 @@ function aftaleBadgeHTML(idNum) {
     const base = (i === 0)
       ? 'font-size:20px;font-weight:900;color:#0c4a6e;line-height:1.35;'
       : 'font-size:15px;font-weight:800;color:#0369a1;line-height:1.4;margin-top:4px;padding-top:4px;border-top:1px dashed rgba(3,105,161,0.25);';
+    const _bc = customers.find(x => (x.idNum || '') === String(idNum));
+    const _vt = _bc ? aftaleVisitText(_bc, a.text) : '';
+    const _vline = _vt ? `<div style="font-size:14px;font-weight:800;color:#1d4ed8;margin-top:2px;">${_vt}</div>` : '';
     return `<div onclick="event.stopPropagation();openAftalerOnDate('${a.dateKey}','${idNum}')" style="${base}cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-      <span>${formatAftaleLabel(a.dateKey, a.time)}</span>
+      <span>${formatAftaleLabel(a.dateKey, a.time)}${_vline}</span>
       <span style="flex-shrink:0;font-size:13px;font-weight:900;color:#fff;background:#00c4ff;border-radius:8px;padding:4px 10px;white-space:nowrap;box-shadow:0 2px 4px rgba(0,196,255,0.35);">📆 Åbn</span>
     </div>`;
   }).join('');
@@ -4376,6 +4379,40 @@ function extractLastVisitByType(notes, typeWord) {
   return latest;
 }
 
+// ══════════════════════════════════════════
+//  آخر زيارة حسب نوع الحجز (hl/hr = رجل Mend ، dl/dr = سيدة Dame)
+// ══════════════════════════════════════════
+// يستخرج نوع الحجز من نص الموعد: 'Mend' أو 'Dame' أو null إذا لا يوجد رمز
+function getAftaleType(text) {
+  if (!text) return null;
+  var m = String(text).match(/(?:^|[^a-zA-Z])([hdHD])[\s]?([rlRL])(?![a-zA-Z])/);
+  if (!m) return null;
+  return m[1].toUpperCase() === 'H' ? 'Mend' : 'Dame';
+}
+
+// يرجع { iso, type, missing }
+//  - iso: تاريخ آخر زيارة من نفس نوع الحجز (أو آخر زيارة عامة إذا لا توجد زيارات مصنّفة)
+//  - missing: true إذا للزبون زيارات من النوع الآخر فقط (لا زيارة سابقة من هذا النوع)
+function lastVisitForAftaleType(c, text) {
+  var general = c.lastVisit || c.date || null;
+  var type = getAftaleType(text);
+  if (!type) return { iso: general, type: null, missing: false };
+  var same = extractLastVisitByType(c.notes, type);
+  if (same) return { iso: same, type: type, missing: false };
+  var other = extractLastVisitByType(c.notes, type === 'Mend' ? 'Dame' : 'Mend');
+  if (other) return { iso: null, type: type, missing: true };
+  return { iso: general, type: type, missing: false };
+}
+
+// نص جاهز للعرض: "👨 Mend · 19.10.2026 oktober · 7 dage siden"
+function aftaleVisitText(c, text) {
+  var r = lastVisitForAftaleType(c, text);
+  var icon = r.type === 'Mend' ? '👨 Mend' : r.type === 'Dame' ? '👩 Dame' : '';
+  if (r.missing) return (icon ? icon + ' · ' : '') + 'Ingen tidligere ' + r.type + ' besøg';
+  if (!r.iso) return '⚠️ Ingen besøg';
+  return (icon ? icon + ' · ' : '⏱ ') + formatDate(r.iso) + ' · ' + monthsAgoText(r.iso);
+}
+
 async function quickSaveNote() {
   const c = customers.find(x => x.id===currentModalId);
   if (!c) return;
@@ -5592,7 +5629,7 @@ function showAftaleMiniCard(id){
 
   const upcoming = (typeof findUpcomingAftalerForId === 'function') ? findUpcomingAftalerForId(c.idNum) : [];
   const aftaleHtml = upcoming.length
-    ? '<div style="margin-top:10px;background:'+(colored?'#ffffff':'#e6f8ff')+';border:2px solid #00c4ff;border-radius:10px;padding:7px 12px;font-size:15px;font-weight:800;color:#0369a1;line-height:1.4;">📅 '+formatAftaleLabel(upcoming[0].dateKey, upcoming[0].time)+(upcoming.length>1?(' <span style="background:#00c4ff;color:#fff;border-radius:12px;padding:1px 8px;font-size:12px;font-weight:900;">+'+(upcoming.length-1)+'</span>'):'')+'</div>'
+    ? '<div style="margin-top:10px;background:'+(colored?'#ffffff':'#e6f8ff')+';border:2px solid #00c4ff;border-radius:10px;padding:7px 12px;font-size:15px;font-weight:800;color:#0369a1;line-height:1.4;">📅 '+formatAftaleLabel(upcoming[0].dateKey, upcoming[0].time)+'<div style="font-size:14px;font-weight:800;color:#1d4ed8;margin-top:2px;">'+aftaleVisitText(c, upcoming[0].text)+'</div>'+(upcoming.length>1?(' <span style="background:#00c4ff;color:#fff;border-radius:12px;padding:1px 8px;font-size:12px;font-weight:900;">+'+(upcoming.length-1)+'</span>'):'')+'</div>'
     : '<div style="margin-top:10px;color:'+(colored?'rgba(255,255,255,0.85)':'#94a3b8')+';font-size:14px;font-weight:700;">📅 Ingen kommende aftale</div>';
 
   const body=document.getElementById('aftale-mini-body');
@@ -5968,8 +6005,7 @@ function renderAftalerSchedule() {
       if (m) {
         const c = customers.find(x => (x.idNum || '') === m[1]);
         if (c && c.name) {
-          const lv = c.lastVisit || c.date;
-          const line2 = lv ? '⏱ ' + formatDate(lv) + ' · ' + monthsAgoText(lv) : '⚠️ Ingen besøg';
+          const line2 = aftaleVisitText(c, input.value);
           namePrev.innerHTML = '👤 ' + c.name + '<br><span style="font-size:13px;font-weight:700;">' + line2 + '</span>';
           namePrev.style.display = 'block';
           return;
