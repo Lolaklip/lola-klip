@@ -437,8 +437,8 @@ function saveNewPin() {
 }
 
 function expandQNote(el) {
-  el.style.maxHeight = '120px';
-  el.style.overflow = 'auto';
+  el.style.maxHeight = 'none';
+  el.style.overflow = 'visible';
 }
 
 function limitQNoteWords(el) {
@@ -457,8 +457,8 @@ function nfmtCaretToEnd(el){
 }
 
 async function saveQNote(id, el) {
-  el.style.maxHeight = '60px';
-  el.style.overflow = 'hidden';
+  el.style.maxHeight = 'none';
+  el.style.overflow = 'visible';
   // Update global array
   const c = customers.find(x => x.id === id);
   if (!c) return;
@@ -832,7 +832,7 @@ async function setCardDuration(secs) {
     <input type="range" min="0.8" max="2.6" step="0.1" value="1" onpointerdown="nfmtSizeStart(this)" onmousedown="nfmtSizeStart(this)" oninput="nfmtSizeInput(this.value)" style="width:110px;accent-color:#f59e0b;cursor:pointer;">
     <span style="font-size:18px;color:#88c;">▶</span>
     <span style="width:1px;height:22px;background:#33506e;"></span>
-    <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:28px;height:28px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#e11d48;cursor:pointer;padding:0;"></button>
+    <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:28px;height:28px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#c0335a;cursor:pointer;padding:0;"></button>
     <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('b')" title="Blå" style="width:28px;height:28px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#2563eb;cursor:pointer;padding:0;"></button>
     <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('g')" title="Grøn" style="width:28px;height:28px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#16a34a;cursor:pointer;padding:0;"></button>
     <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('k')" title="Sort" style="width:28px;height:28px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#111111;cursor:pointer;padding:0;"></button>
@@ -915,7 +915,7 @@ async function setCardDuration(secs) {
         <input type="range" id="nfmt-size3" min="0.8" max="2.6" step="0.1" value="1" onpointerdown="nfmtSizeStart(this)" onmousedown="nfmtSizeStart(this)" oninput="nfmtSizeInput(this.value)" style="flex:1;min-width:80px;accent-color:#00e5b0;cursor:pointer;">
         <span style="font-size:20px;color:#88c;">▶</span>
         <span style="width:1px;height:22px;background:#33506e;"></span>
-        <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:30px;height:30px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#e11d48;cursor:pointer;padding:0;"></button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:30px;height:30px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#c0335a;cursor:pointer;padding:0;"></button>
         <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('b')" title="Blå" style="width:30px;height:30px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#2563eb;cursor:pointer;padding:0;"></button>
         <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('g')" title="Grøn" style="width:30px;height:30px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#16a34a;cursor:pointer;padding:0;"></button>
         <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('k')" title="Sort" style="width:30px;height:30px;border-radius:50%;border:2px solid #0d1b2a;box-shadow:0 0 0 1px #33506e;background:#111111;cursor:pointer;padding:0;"></button>
@@ -1498,7 +1498,7 @@ async function setCardDuration(secs) {
         <input type="range" id="nfmt-size2" min="0.8" max="2.6" step="0.1" value="1" onpointerdown="nfmtSizeStart(this)" onmousedown="nfmtSizeStart(this)" oninput="nfmtSizeInput(this.value)" style="flex:1;min-width:80px;accent-color:#0d9488;cursor:pointer;">
         <span style="font-size:20px;color:#64748b;">▶</span>
         <span style="width:1px;height:22px;background:#e2e8f0;"></span>
-        <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#e11d48;cursor:pointer;padding:0;"></button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#c0335a;cursor:pointer;padding:0;"></button>
         <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('b')" title="Blå" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#2563eb;cursor:pointer;padding:0;"></button>
         <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('g')" title="Grøn" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#16a34a;cursor:pointer;padding:0;"></button>
         <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('k')" title="Sort" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#111111;cursor:pointer;padding:0;"></button>
@@ -2420,8 +2420,8 @@ function cardHTML(c, showAftale) {
           <div style="display:flex;align-items:center;gap:8px;width:100%;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:5px 12px;box-sizing:border-box;"><span style="background:#ec4899;color:#fff;border-radius:8px;padding:2px 8px;font-size:14px;font-weight:900;white-space:nowrap;">👩 Dame</span><span style="font-size:19px;font-weight:900;color:#1e293b;">${formatDate(lastDame)}</span><span style="font-size:13px;font-weight:800;color:#ec4899;margin-left:auto;white-space:nowrap;">⏱ ${monthsAgoText(lastDame)}</span></div>
         </div>` : `<div style="display:block;width:100%;background:${lastVisit ? '#f1f5f9' : '#fef3c7'};color:${lastVisit ? '#1e293b' : '#92400e'};font-size:22px;font-weight:900;padding:5px 14px;border-radius:10px;margin-bottom:6px;box-sizing:border-box;border:1px solid ${lastVisit ? '#e2e8f0' : '#fcd34d'};">${lastVisit ? formatDate(lastVisit) + (c.lastVisitTime ? '<span style="font-size:15px;font-weight:700;color:#64748b;margin-left:8px;">kl. ' + c.lastVisitTime + '</span>' : '') : '⚠️ Ingen besøg'}</div>`}
         <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;">
-          <div id="qnote-${c.id}" class="nfmt-editable" contenteditable="true" data-ph="📝 Hurtig note..." onclick="event.stopPropagation()" onfocus="showQnoteTools(this);expandQNote(this)" onblur="hideQnoteTools();saveQNote(${c.id},this)" oninput="limitQNoteWords(this)" style="flex:1;min-height:90px;max-height:90px;background:#fffbea;color:#92400e;font-size:18px;font-weight:700;padding:8px 10px;border-radius:10px;box-sizing:border-box;border:2px solid #fcd34d;overflow-y:auto;font-family:'DM Sans',sans-serif;line-height:1.5;white-space:pre-wrap;word-break:break-word;outline:none;">${notesToEditorHtml(c.quickNote||'')}</div>
-          <button id="qnote-save-btn-${c.id}" onclick="event.stopPropagation();saveQNoteBtn(${c.id})" style="width:30px;min-height:60px;background:#f59e0b;border:none;border-bottom:3px solid #92400e;border-radius:10px;color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">💾</button>
+          <div id="qnote-${c.id}" class="nfmt-editable" contenteditable="true" data-ph="📝 Hurtig note..." onclick="event.stopPropagation()" onfocus="showQnoteTools(this);expandQNote(this)" onblur="hideQnoteTools();saveQNote(${c.id},this)" oninput="limitQNoteWords(this)" style="flex:1;min-width:0;min-height:170px;max-height:none;height:auto;background:#fffbea;color:#92400e;font-size:20px;font-weight:700;padding:12px 14px;border-radius:12px;box-sizing:border-box;border:2px solid #fcd34d;overflow:visible;font-family:'DM Sans',sans-serif;line-height:1.5;white-space:pre-wrap;word-break:break-word;outline:none;">${notesToEditorHtml(c.quickNote||'')}</div>
+          <button id="qnote-save-btn-${c.id}" onclick="event.stopPropagation();saveQNoteBtn(${c.id})" style="width:38px;min-height:60px;align-self:stretch;max-height:170px;background:#f59e0b;border:none;border-bottom:3px solid #92400e;border-radius:10px;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">💾</button>
         </div>
         <button onclick="event.stopPropagation();openCardUnlock(${c.id},this)" id="open-card-btn-${c.id}" style="width:100%;height:52px;background:linear-gradient(180deg,#22c55e,#16a34a);border:none;border-bottom:4px solid #14532d;border-radius:14px;color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 10px rgba(0,0,0,0.15);">🔓 Open Card</button>
         <div id="service-btns-${c.id}" style="display:none;">
@@ -3461,7 +3461,7 @@ function openModal(id) {
           <input type="range" id="nfmt-size" min="0.8" max="2.6" step="0.1" value="1" onpointerdown="nfmtSizeStart(this)" onmousedown="nfmtSizeStart(this)" oninput="nfmtSizeInput(this.value)" style="flex:1;min-width:80px;accent-color:#0d9488;cursor:pointer;">
           <span style="font-size:20px;color:#64748b;">▶</span>
           <span style="width:1px;height:22px;background:#e2e8f0;"></span>
-          <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#e11d48;cursor:pointer;padding:0;"></button>
+          <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('r')" title="Rød" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#c0335a;cursor:pointer;padding:0;"></button>
           <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('b')" title="Blå" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#2563eb;cursor:pointer;padding:0;"></button>
           <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('g')" title="Grøn" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#16a34a;cursor:pointer;padding:0;"></button>
           <button type="button" onmousedown="event.preventDefault()" onclick="nfmtApplyColor('k')" title="Sort" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:#111111;cursor:pointer;padding:0;"></button>
@@ -4635,7 +4635,7 @@ async function quickSaveNote() {
 }
 
 // ===== نظام تنسيق النوت (تكبير + تلوين الكلمات) =====
-const NFMT_COLORS = { r:'#e11d48', b:'#2563eb', g:'#16a34a', o:'#ea580c', k:'#000000' };
+const NFMT_COLORS = { r:'#c0335a', b:'#2563eb', g:'#16a34a', o:'#ea580c', k:'#000000' };
 
 function nfmtEscape(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
