@@ -3665,9 +3665,13 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
   const dayName = aftalerDays[dObj.getDay()];
   const dateFmt = p[2] + '-' + p[1] + '-' + p[0]; // DD-MM-YYYY
 
+  // Dame klip / Herre klip ud fra koden i aftalen (dr/dl = Dame, hr/hl = Herre)
+  const _klipType = getAftaleType(val);
+  const _klipTxt = _klipType === 'Dame' ? ' (Dame klip)' : _klipType === 'Mend' ? ' (Herre klip)' : '';
+
   const baseMsg =
     'Hej\n' +
-    'Vi glæder os til at se dig til din aftale hos os.\n\n' +
+    'Vi glæder os til at se dig til din aftale hos os' + _klipTxt + '.\n\n' +
     '🗓️ ' + dayName + ' ' + dateFmt + '\n' +
     '⏰ Kl. ' + timeStr + '\n\n' +
     'Hvis du er forhindret eller ønsker at ændre din tid, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.\n\n' +
