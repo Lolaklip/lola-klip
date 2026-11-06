@@ -123,6 +123,16 @@
   /* ═══ x92: جدول Aftaler يبقى داخل الشاشة ويتمرّر من الداخل (الهيدر ثابت) ═══ */
   body.aftaler-fit{overflow-y:hidden;}
   #aftaler-schedule{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+  /* x93: وضع مضغوط أثناء ظهور الكيبورد في Aftaler — الهيدر يختفي ويتقلّص الباقي ليكبر الجدول */
+  body.kb-open .header{display:none !important;}
+  body.kb-open #screen-aftaler{padding:6px 14px 6px !important;}
+  body.kb-open #screen-aftaler > .section-title{display:none !important;}
+  body.kb-open #aftaler-nav{margin-bottom:6px !important;gap:8px !important;}
+  body.kb-open #aftaler-nav button{width:44px !important;height:44px !important;font-size:22px !important;border-radius:10px !important;}
+  body.kb-open #aftaler-nav button.aftaler-today{width:auto !important;padding:0 16px !important;font-size:15px !important;}
+  body.kb-open #aftaler-week-label{font-size:11px !important;margin-bottom:0 !important;}
+  body.kb-open #aftaler-day-label{font-size:18px !important;}
+  body.kb-open #aftaler-date-label{font-size:14px !important;margin-top:0 !important;}
   .tab{flex:0 1 180px;padding:12px 4px;border:none;background-color:#ffffff;background:#ffffff;
     box-shadow:4px 0 6px rgba(0,0,0,0.15),-4px 0 6px rgba(0,0,0,0.15),0 7px 0 #8aaabb,0 9px 12px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.9);
     border:1px solid #b0c8d8;
@@ -1299,7 +1309,7 @@ async function setCardDuration(secs) {
   <div class="section-title">📆 Aftaler</div>
 
   <!-- التنقل بين الأيام -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;">
+  <div id="aftaler-nav" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;">
     <div style="flex:1;text-align:center;">
       <div id="aftaler-week-label" style="font-size:14px;color:#94a3b8;font-weight:700;margin-bottom:2px;"></div>
       <div id="aftaler-day-label" style="font-size:28px;font-weight:900;color:#fff;"></div>
@@ -1307,7 +1317,7 @@ async function setCardDuration(secs) {
     </div>
     <button onclick="aftalerPrevDay()" style="width:60px;height:60px;background:#0f2035;border:3px solid var(--accent);border-radius:14px;color:var(--accent);font-size:36px;font-weight:900;line-height:1;cursor:pointer;flex-shrink:0;">←</button>
     <button onclick="aftalerNextDay()" style="width:60px;height:60px;background:#0f2035;border:3px solid var(--accent);border-radius:14px;color:var(--accent);font-size:36px;font-weight:900;line-height:1;cursor:pointer;flex-shrink:0;">→</button>
-    <button onclick="aftalerGoToday()" style="padding:0 22px;height:60px;background:linear-gradient(180deg,#00f5c0,#00c496);border:none;border-radius:14px;color:#050d1a;font-size:17px;font-weight:900;cursor:pointer;flex-shrink:0;">I dag</button>
+    <button class="aftaler-today" onclick="aftalerGoToday()" style="padding:0 22px;height:60px;background:linear-gradient(180deg,#00f5c0,#00c496);border:none;border-radius:14px;color:#050d1a;font-size:17px;font-weight:900;cursor:pointer;flex-shrink:0;">I dag</button>
     <button onclick="toggleMiniCal()" style="width:60px;height:60px;background:#0f2035;border:3px solid var(--accent);border-radius:14px;color:var(--accent);font-size:30px;cursor:pointer;flex-shrink:0;">📅</button>
     <button onclick="toggleAftaleSearch()" style="width:60px;height:60px;background:#0f2035;border:3px solid #f59e0b;border-radius:14px;color:#f59e0b;font-size:28px;cursor:pointer;flex-shrink:0;">🔍</button>
   </div>
@@ -3315,18 +3325,32 @@ function initFastgjortFloat() {
 // ══════════════════════════════════════════
 
 // (1) يحسب ارتفاع الجدول = ما تبقّى من الشاشة، فيتمرّر الجدول وحده والهيدر يبقى ثابتاً
+// x93: كشف ظهور الكيبورد = الارتفاع المرئي أقل بوضوح من أكبر ارتفاع سُجّل (يُعاد الضبط عند تغيّر العرض/الاتجاه)
+let _vhMax = 0, _vwLast = 0;
+function kbIsOpen() {
+  const vv = window.visualViewport;
+  const vh = (vv && vv.height) || window.innerHeight;
+  const vw = window.innerWidth;
+  if (!_vhMax || vw !== _vwLast) { _vhMax = Math.max(vh, window.innerHeight); _vwLast = vw; }
+  if (vh > _vhMax) _vhMax = vh;
+  return vh < _vhMax * 0.78;
+}
 function fitAftalerHeight() {
   try {
     const sc  = document.getElementById('aftaler-schedule');
     const scr = document.getElementById('screen-aftaler');
     const on  = !!(sc && scr && scr.classList.contains('active'));
+    const kb  = on && kbIsOpen();
+    document.body.classList.toggle('kb-open', kb);   // x93: وضع مضغوط (الهيدر يختفي) أثناء الكيبورد
     document.body.classList.toggle('aftaler-fit', on);
     document.documentElement.style.overflowY = on ? 'hidden' : '';
     if (!on) { if (sc) { sc.style.height = ''; sc.style.maxHeight = ''; sc.style.overflowY = ''; } return; }
-    window.scrollTo(0, 0);
-    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    if (!kb) window.scrollTo(0, 0);
+    const vv  = window.visualViewport;
+    const vh  = (vv && vv.height) || window.innerHeight;
+    const off = (vv && vv.offsetTop) || 0;
     const top = sc.getBoundingClientRect().top;
-    const h = Math.max(220, Math.floor(vh - top - 22));
+    const h = Math.max(kb ? 120 : 220, Math.floor(off + vh - top - (kb ? 8 : 22)));
     sc.style.height = h + 'px';
     sc.style.maxHeight = h + 'px';
     sc.style.overflowY = 'auto';
@@ -7144,6 +7168,15 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('orientationchange', () => setTimeout(fitAftalerHeight, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAftalerHeight);
   setTimeout(fitAftalerHeight, 400);   // بعد تحميل الخطوط
+  // x93: عند الكتابة داخل جدول Aftaler نُبقي الخانة المحرَّرة ظاهرة فوق الكيبورد
+  document.addEventListener('focusin', (e) => {
+    const t = e.target;
+    setTimeout(fitAftalerHeight, 350);
+    if (t && t.closest && t.closest('#aftaler-schedule') && t.matches('input,textarea,[contenteditable]')) {
+      setTimeout(() => { try { t.scrollIntoView({ block: 'center' }); } catch (err) {} }, 450);
+    }
+  });
+  document.addEventListener('focusout', () => setTimeout(fitAftalerHeight, 350));
 });
 
 // ── قفل Statistik: ضغط مطوّل 10 ثواني + كود سري ──
