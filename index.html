@@ -120,6 +120,9 @@
   .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
   .logo{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
   .tab-bar{display:flex;gap:5px;padding:4px 4px 8px;overflow:visible;justify-content:flex-end;}
+  /* ═══ x92: جدول Aftaler يبقى داخل الشاشة ويتمرّر من الداخل (الهيدر ثابت) ═══ */
+  body.aftaler-fit{overflow-y:hidden;}
+  #aftaler-schedule{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
   .tab{flex:0 1 180px;padding:12px 4px;border:none;background-color:#ffffff;background:#ffffff;
     box-shadow:4px 0 6px rgba(0,0,0,0.15),-4px 0 6px rgba(0,0,0,0.15),0 7px 0 #8aaabb,0 9px 12px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.9);
     border:1px solid #b0c8d8;
@@ -711,6 +714,20 @@ async function setCardDuration(secs) {
     <button class="tab" id="tab-backup" onclick="switchTab('backup')" style="background:#ffffff !important;display:none;"><span class="tab-icon">💾</span><span class="tab-label">Backup</span></button>
     <button class="tab" id="secret-btn" oncontextmenu="return false" onpointerdown="event.preventDefault();secretPressStart(event)" onpointerup="secretPressEnd()" style="background:#ffffff !important;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;"><span class="tab-icon">&nbsp;</span><span class="tab-label">&nbsp;</span></button>
   </div>
+</div>
+
+<!-- x92: صندوق ID عائم — يظهر في كل الصفحات، يُسحب بالإصبع من أي مكان فيه عدا خانة الكتابة -->
+<div id="idbox" style="position:fixed;left:24px;top:90px;z-index:9990;width:230px;background:#0d1b2a;border:2px solid #00e5b0;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,0.55);padding:2px 8px 8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;">
+  <div id="idbox-handle" style="height:30px;display:flex;align-items:center;justify-content:center;gap:10px;">
+    <span style="color:#00e5b0;font-size:15px;font-weight:900;">⠿</span>
+    <span style="color:#00e5b0;font-size:13px;font-weight:900;letter-spacing:2px;">ID</span>
+    <span style="color:#00e5b0;font-size:15px;font-weight:900;">⠿</span>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <input id="idbox-input" type="tel" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="ID" oninput="idBoxLookup()" onkeydown="if(event.key==='Enter'){idBoxOpen();}" style="flex:1;min-width:0;height:50px;font-size:30px;font-weight:900;text-align:center;background:#f5f0e8;color:#111;border:2px solid #00e5b0;border-radius:10px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box;user-select:text;-webkit-user-select:text;touch-action:auto;cursor:text;">
+    <button id="idbox-clear" type="button" onclick="idBoxClear()" style="width:46px;height:50px;background:#1a0a0a;border:2px solid #dc2626;border-radius:10px;color:#ef4444;font-size:20px;font-weight:900;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+  <div id="idbox-result" style="min-height:24px;margin-top:6px;font-size:18px;font-weight:800;color:#94a3b8;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
 </div>
 
 <div class="screen active" id="screen-add">
@@ -1691,6 +1708,7 @@ const LOLA_MIRROR_KEYS = [
   'lola-pin',             // رمز القفل
   'lola_fastgjort',       // الرقم المثبّت
   'lola_fastgjort_pos',   // موضع الشارة
+  'lola_idbox_pos',       // موضع صندوق ID العائم
   'lola_last_export'      // تاريخ آخر Backup
 ];
 
@@ -3290,6 +3308,126 @@ function initFastgjortFloat() {
   badge.addEventListener('pointerup', fgEnd);
   badge.addEventListener('pointercancel', fgEnd);
   window.addEventListener('resize', () => { if (badge.style.position === 'fixed') fgClampToViewport(badge); });
+}
+
+// ══════════════════════════════════════════
+//  x92 — (1) جدول Aftaler داخل حدود الشاشة   (2) صندوق ID العائم
+// ══════════════════════════════════════════
+
+// (1) يحسب ارتفاع الجدول = ما تبقّى من الشاشة، فيتمرّر الجدول وحده والهيدر يبقى ثابتاً
+function fitAftalerHeight() {
+  try {
+    const sc  = document.getElementById('aftaler-schedule');
+    const scr = document.getElementById('screen-aftaler');
+    const on  = !!(sc && scr && scr.classList.contains('active'));
+    document.body.classList.toggle('aftaler-fit', on);
+    document.documentElement.style.overflowY = on ? 'hidden' : '';
+    if (!on) { if (sc) { sc.style.height = ''; sc.style.maxHeight = ''; sc.style.overflowY = ''; } return; }
+    window.scrollTo(0, 0);
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    const top = sc.getBoundingClientRect().top;
+    const h = Math.max(220, Math.floor(vh - top - 22));
+    sc.style.height = h + 'px';
+    sc.style.maxHeight = h + 'px';
+    sc.style.overflowY = 'auto';
+    sc.style.overflowX = 'hidden';
+  } catch (e) { /* صامت: لا نعطّل التطبيق */ }
+}
+
+// (2) صندوق ID: يكتب الرقم فيظهر اسم الزبون فوراً (نفس قاعدة بحث الـ ID: تطابق تام)
+function idBoxFind(v) {
+  if (!v) return [];
+  return (typeof customers !== 'undefined' ? customers : []).filter(c => String(c.idNum || '') === v);
+}
+function idBoxLookup() {
+  const inp = document.getElementById('idbox-input');
+  const out = document.getElementById('idbox-result');
+  if (!inp || !out) return;
+  const v = inp.value.replace(/\D/g, '');
+  if (v !== inp.value) inp.value = v;
+  if (!v) { out.textContent = ''; out.style.color = '#94a3b8'; out.style.cursor = 'default'; return; }
+  const res = idBoxFind(v);
+  if (!res.length) { out.textContent = 'Ingen kunde'; out.style.color = '#f87171'; out.style.cursor = 'default'; return; }
+  out.textContent = (res[0].name || '—') + (res.length > 1 ? '  +' + (res.length - 1) : '');
+  out.style.color = '#00e5b0';
+  out.style.cursor = 'pointer';
+}
+function idBoxClear() {
+  const inp = document.getElementById('idbox-input');
+  if (inp) inp.value = '';
+  idBoxLookup();
+}
+// لمس الاسم ← يفتح بطاقة الزبون في صفحة Search (الطريق الموجود أصلاً في التطبيق)
+function idBoxOpen() {
+  const inp = document.getElementById('idbox-input');
+  if (!inp) return;
+  const v = inp.value.replace(/\D/g, '');
+  if (!v || !idBoxFind(v).length) return;
+  switchTab('search');
+  const si = document.getElementById('search-input');
+  if (si) { si.value = v; doSearch(); }
+}
+let idBoxInit = false;
+function idBoxClamp(box) {
+  const r = box.getBoundingClientRect();
+  let left = parseFloat(box.style.left), top = parseFloat(box.style.top);
+  if (isNaN(left)) left = r.left;
+  if (isNaN(top))  top  = r.top;
+  left = Math.min(Math.max(0, left), Math.max(0, window.innerWidth  - r.width));
+  top  = Math.min(Math.max(0, top),  Math.max(0, window.innerHeight - r.height));
+  box.style.left = left + 'px';
+  box.style.top  = top  + 'px';
+}
+function initIdBox() {
+  const box = document.getElementById('idbox');
+  if (!box || idBoxInit) return;
+  idBoxInit = true;
+  // الموضع: المحفوظ أولاً، وإلا تحت الشعار في المساحة الفارغة من الهيدر
+  let pos = null;
+  try { pos = JSON.parse(localStorage.getItem('lola_idbox_pos') || 'null'); } catch (e) {}
+  if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+    box.style.left = pos.left + 'px';
+    box.style.top  = pos.top  + 'px';
+  } else {
+    const lg = document.querySelector('.logo');
+    if (lg) {
+      const r = lg.getBoundingClientRect();
+      box.style.left = Math.max(12, r.left) + 'px';
+      box.style.top  = Math.round(r.bottom + 14) + 'px';
+    }
+  }
+  idBoxClamp(box);
+  // السحب بالإصبع من أي نقطة في الصندوق عدا خانة الكتابة وزر ✕
+  let dragging = false, moved = false, downOnName = false, sx = 0, sy = 0, ol = 0, ot = 0;
+  box.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('input,button')) return;
+    dragging = true; moved = false;
+    downOnName = !!e.target.closest('#idbox-result');
+    sx = e.clientX; sy = e.clientY;
+    const r = box.getBoundingClientRect(); ol = r.left; ot = r.top;
+    box.style.cursor = 'grabbing';
+    try { box.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+    const r = box.getBoundingClientRect();
+    box.style.left = Math.min(Math.max(0, ol + dx), Math.max(0, window.innerWidth  - r.width))  + 'px';
+    box.style.top  = Math.min(Math.max(0, ot + dy), Math.max(0, window.innerHeight - r.height)) + 'px';
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    box.style.cursor = 'grab';
+    if (!moved && downOnName) { idBoxOpen(); return; }   // لمسة بسيطة على الاسم
+    if (moved) {
+      try { localStorage.setItem('lola_idbox_pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (err) {}
+    }
+  };
+  box.addEventListener('pointerup', end);
+  box.addEventListener('pointercancel', end);
+  window.addEventListener('resize', () => idBoxClamp(box));
 }
 
 function doSearch() {
@@ -6087,6 +6225,9 @@ function renderAftalerSchedule() {
   const dayData = data[key] || {};
 
   const container = document.getElementById('aftaler-schedule');
+  // x92: نحتفظ بموضع التمرير الداخلي عند إعادة الرسم لنفس اليوم (بعد تعديل موعد مثلاً)
+  const _keepScroll = (window._aftalerLastKey === key) ? container.scrollTop : 0;
+  window._aftalerLastKey = key;
   container.innerHTML = '';
   container.style.cssText = 'background:#ffffff;border-radius:14px;overflow:hidden;border:2px solid #e2e8f0;display:flex;flex-direction:column;gap:0;';
 
@@ -6409,6 +6550,9 @@ function renderAftalerSchedule() {
     });
   }
 
+  fitAftalerHeight();   // x92: إعادة ضبط الارتفاع بعد كل إعادة رسم (الرسم يعيد تعيين style)
+  container.scrollTop = _keepScroll;
+
   if (aftaleHighlightId && key === aftaleHighlightDate) {
     setTimeout(function(){
       const hl = container.querySelector('[data-hl="1"]');
@@ -6491,6 +6635,7 @@ function switchTab(tab, keepListFilter) {
   if (tab==='telefonbog') renderTelefonbogStatus();
   if (tab==='backup') updateStoragePlads();
   if (tab==='add') resetAddForm();
+  fitAftalerHeight();
 }
 
 function resetAddForm() {
@@ -6994,6 +7139,11 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHistoryPanel();
   updateFastgjortDisplay();
   initFastgjortFloat();
+  initIdBox();
+  window.addEventListener('resize', fitAftalerHeight);
+  window.addEventListener('orientationchange', () => setTimeout(fitAftalerHeight, 250));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAftalerHeight);
+  setTimeout(fitAftalerHeight, 400);   // بعد تحميل الخطوط
 });
 
 // ── قفل Statistik: ضغط مطوّل 10 ثواني + كود سري ──
