@@ -3858,12 +3858,94 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
     phaseIcon = '🔔';
   }
 
-  showAftaleSMSConfirm({ name: name, phone: phone, id: custId }, msg, dateKey, targetKey, phaseLabel, phaseIcon);
+  // ── x94: عدّ مواعيد نفس الزبون (نفس الـ ID أو الهاتف) في نفس اليوم، بدون الملغاة ──
+  const grpKey = idM ? ('id:' + idM[1]) : ('ph:' + phone);
+  const selfKey = timeStr + (colSide || '');
+  const _reminder = bookingSent;
+  const group = aftaleSameDayGroup(dateKey, grpKey);
+  if (!group.some(function(g){ return g.key === selfKey; })) {
+    group.push({ time: timeStr, side: colSide || '', key: selfKey, type: _klipType });
+    group.sort(aftaleGroupSort);
+  }
+  const _typeTxt = function(t){ return t === 'Dame' ? ' (Dame klip)' : t === 'Mend' ? ' (Herre klip)' : ''; };
+  const _footerMany =
+    'Hvis du er forhindret eller ønsker at ændre dine tider, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.\n\n' +
+    'Mvh. Lola Klip 🌹';
+  // n = antal tider i beskeden. 1 = den gamle besked uændret.
+  function buildMsg(n) {
+    const pre = _reminder ? 'Husk din tid ⏰\n' : '';
+    if (n <= 1) return pre + baseMsg;
+    if (group.length === n) {
+      // alle tider kendes → vis hele listen
+      return pre +
+        'Hej\n' +
+        'Vi glæder os til at se dig til dine aftaler hos os.\n\n' +
+        '🗓️ ' + dayName + ' ' + dateFmt + '\n\n' +
+        '📋 Du har i alt ' + n + ' tider hos os denne dag:\n' +
+        group.map(function(g){ return '• Kl. ' + g.time + _typeTxt(g.type); }).join('\n') + '\n\n' +
+        _footerMany;
+    }
+    // tallet er rettet manuelt → kun antal (tiderne kendes ikke)
+    return pre +
+      'Hej\n' +
+      'Vi glæder os til at se dig til din aftale hos os' + _klipTxt + '.\n\n' +
+      '🗓️ ' + dayName + ' ' + dateFmt + '\n' +
+      '⏰ Kl. ' + timeStr + '\n\n' +
+      '📋 Du har i alt ' + n + ' tider hos os denne dag.\n\n' +
+      _footerMany;
+  }
+  const _sfx = _reminder ? '_sms2' : '_sms';
+  const opts = {
+    count: group.length,
+    build: buildMsg,
+    markKeys: group.map(function(g){ return g.key + _sfx; })
+  };
+  msg = buildMsg(group.length);
+
+  showAftaleSMSConfirm({ name: name, phone: phone, id: custId }, msg, dateKey, targetKey, phaseLabel, phaseIcon, opts);
 }
 
-function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon) {
+// x94: كل مواعيد نفس الزبون في اليوم (نفس الـ ID في البداية، أو نفس الهاتف إن لم يوجد ID) — بدون الملغاة (no/afbud/syg)
+function aftaleGroupSort(a, b) {
+  return a.time.padStart(5, '0').localeCompare(b.time.padStart(5, '0')) || a.side.localeCompare(b.side);
+}
+function aftaleSameDayGroup(dateKey, grpKey) {
+  const day = loadAftalerData()[dateKey] || {};
+  const out = [];
+  Object.keys(day).forEach(function(k) {
+    const m = k.match(/^(\d{1,2}:\d{2})(_R)?$/);
+    if (!m) return;
+    const v = day[k];
+    if (!v) return;
+    const st = day[k + '_status'];
+    if (st === 'no' || st === 'afbud' || st === 'syg') return;
+    const t = String(v).trim();
+    let gk = null;
+    const im = t.match(/^\s*(\d{3,4})\b/);
+    if (im) gk = 'id:' + im[1];
+    else { const pm = t.match(/(\d{8,})/); if (pm) gk = 'ph:' + pm[1]; }
+    if (gk !== grpKey) return;
+    out.push({ time: m[1], side: m[2] || '', key: k, type: getAftaleType(t) });
+  });
+  out.sort(aftaleGroupSort);
+  return out;
+}
+
+function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon, opts) {
   const old = document.getElementById('aftale-sms-overlay');
   if (old) old.remove();
+
+  let curMsg = msg;
+  let curN = (opts && opts.count) || 1;
+  const cntRow = (opts && opts.build) ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;background:#eff6ff;border:2px solid #bfdbfe;border-radius:12px;padding:8px 12px;">
+        <div style="font-size:16px;font-weight:900;color:#1e3a8a;">📋 Antal tider</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="aftale-cnt-minus" type="button" style="width:52px;height:48px;background:#fff;border:2px solid #93c5fd;border-radius:12px;font-size:28px;font-weight:900;color:#1d4ed8;cursor:pointer;line-height:1;">−</button>
+          <div id="aftale-cnt-val" style="min-width:36px;text-align:center;font-size:28px;font-weight:900;color:#111;">${curN}</div>
+          <button id="aftale-cnt-plus" type="button" style="width:52px;height:48px;background:#fff;border:2px solid #93c5fd;border-radius:12px;font-size:28px;font-weight:900;color:#1d4ed8;cursor:pointer;line-height:1;">+</button>
+        </div>
+      </div>` : '';
 
   const overlay = document.createElement('div');
   overlay.id = 'aftale-sms-overlay';
@@ -3872,7 +3954,8 @@ function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon) {
     <div style="background:#fff;border-radius:20px;padding:20px;width:100%;max-width:480px;">
       <div style="font-size:19px;font-weight:900;color:#1d4ed8;margin-bottom:4px;">${phaseIcon || '💬'} Send ${phaseLabel || 'SMS'} til ${c.id ? c.id + ' ' : ''}${c.name}?</div>
       <div style="font-size:15px;font-weight:700;color:#16a34a;margin-bottom:12px;">📞 ${c.phone}</div>
-      <div style="background:#f1f5f9;border:2px solid #cbd5e1;border-radius:12px;padding:12px;font-size:15px;line-height:1.6;color:#111;white-space:pre-wrap;max-height:260px;overflow:auto;">${msg}</div>
+      ${cntRow}
+      <div id="aftale-sms-msg" style="background:#f1f5f9;border:2px solid #cbd5e1;border-radius:12px;padding:12px;font-size:15px;line-height:1.6;color:#111;white-space:pre-wrap;max-height:260px;overflow:auto;">${msg}</div>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button onclick="document.getElementById('aftale-sms-overlay').remove()" style="flex:1;padding:14px;background:#ef4444;border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">✕ Annuller</button>
         <button id="aftale-sms-send-btn" style="flex:1;padding:14px;background:linear-gradient(180deg,#22c55e,#16a34a);border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">${phaseIcon || '📩'} Send SMS</button>
@@ -3880,18 +3963,34 @@ function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon) {
     </div>`;
   document.body.appendChild(overlay);
 
+  // x94: عدّاد عدد المواعيد (− / +) — يحدّث نص الرسالة فوراً
+  if (opts && opts.build) {
+    const msgBox = document.getElementById('aftale-sms-msg');
+    const valBox = document.getElementById('aftale-cnt-val');
+    const refresh = function() {
+      curMsg = opts.build(curN);
+      msgBox.textContent = curMsg;
+      valBox.textContent = String(curN);
+    };
+    document.getElementById('aftale-cnt-minus').onclick = function() { if (curN > 1) { curN--; refresh(); } };
+    document.getElementById('aftale-cnt-plus').onclick  = function() { if (curN < 9) { curN++; refresh(); } };
+  }
+
   document.getElementById('aftale-sms-send-btn').onclick = function() {
     const ov = document.getElementById('aftale-sms-overlay');
     if (ov) ov.remove();
-    // Markér aftalen som "SMS sendt"
+    // Markér aftalen som "SMS sendt" (x94: og alle kundens øvrige tider samme dag, så der kun sendes én besked)
     if (dateKey && smsKey) {
       const allData = loadAftalerData();
       if (!allData[dateKey]) allData[dateKey] = {};
       allData[dateKey][smsKey] = Date.now();
+      if (opts && opts.markKeys) {
+        opts.markKeys.forEach(function(k) { if (!allData[dateKey][k]) allData[dateKey][k] = Date.now(); });
+      }
       saveAftalerData(allData);
       if (typeof renderAftalerSchedule === 'function') renderAftalerSchedule();
     }
-    openSMSApp(c.phone, msg);
+    openSMSApp(c.phone, curMsg);
   };
 }
 
