@@ -3827,6 +3827,14 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
   const dayName = aftalerDays[dObj.getDay()];
   const dateFmt = p[2] + '-' + p[1] + '-' + p[0]; // DD-MM-YYYY
 
+  // x95: i dag / i morgen ud fra afstanden mellem i dag og aftalens dato
+  const _nowD = new Date();
+  const _todayD = new Date(_nowD.getFullYear(), _nowD.getMonth(), _nowD.getDate());
+  const _diffDays = Math.round((dObj - _todayD) / 86400000);
+  const _rel = _diffDays === 0 ? 'i dag' : (_diffDays === 1 ? 'i morgen' : '');
+  const _dateLine = '🗓️ ' + (_rel ? (_rel.charAt(0).toUpperCase() + _rel.slice(1) + ', ') : '') + dayName + ' ' + dateFmt;
+  const _dayWord = _rel || 'denne dag';
+
   // Dame klip / Herre klip ud fra koden i aftalen (dr/dl = Dame, hr/hl = Herre)
   const _klipType = getAftaleType(val);
   const _klipTxt = _klipType === 'Dame' ? ' (Dame klip)' : _klipType === 'Mend' ? ' (Herre klip)' : '';
@@ -3834,7 +3842,7 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
   const baseMsg =
     'Hej\n' +
     'Vi glæder os til at se dig til din aftale hos os' + _klipTxt + '.\n\n' +
-    '🗓️ ' + dayName + ' ' + dateFmt + '\n' +
+    _dateLine + '\n' +
     '⏰ Kl. ' + timeStr + '\n\n' +
     'Hvis du er forhindret eller ønsker at ændre din tid, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.\n\n' +
     'Mvh. Lola Klip 🌹';
@@ -3873,15 +3881,18 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
     'Mvh. Lola Klip 🌹';
   // n = antal tider i beskeden. 1 = den gamle besked uændret.
   function buildMsg(n) {
-    const pre = _reminder ? 'Husk din tid ⏰\n' : '';
+    // x95: overskrift afhænger af fase (booking/påmindelse) og af i dag / i morgen
+    const pre = _reminder
+      ? ('Husk din tid' + (_rel ? ' ' + _rel : '') + ' ⏰\n')
+      : (_rel ? ('Du har booket en tid ' + _rel + ' 📅\n') : '');
     if (n <= 1) return pre + baseMsg;
     if (group.length === n) {
-      // alle tider kendes → vis hele listen
+      // alle tider kendes → antal først, så dato, så hele listen
       return pre +
         'Hej\n' +
         'Vi glæder os til at se dig til dine aftaler hos os.\n\n' +
-        '🗓️ ' + dayName + ' ' + dateFmt + '\n\n' +
-        '📋 Du har i alt ' + n + ' tider hos os denne dag:\n' +
+        '📋 Du har i alt ' + n + ' tider hos os ' + _dayWord + '.\n\n' +
+        _dateLine + '\n' +
         group.map(function(g){ return '• Kl. ' + g.time + _typeTxt(g.type); }).join('\n') + '\n\n' +
         _footerMany;
     }
@@ -3889,9 +3900,9 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
     return pre +
       'Hej\n' +
       'Vi glæder os til at se dig til din aftale hos os' + _klipTxt + '.\n\n' +
-      '🗓️ ' + dayName + ' ' + dateFmt + '\n' +
-      '⏰ Kl. ' + timeStr + '\n\n' +
-      '📋 Du har i alt ' + n + ' tider hos os denne dag.\n\n' +
+      '📋 Du har i alt ' + n + ' tider hos os ' + _dayWord + '.\n\n' +
+      _dateLine + '\n' +
+      '⏰ Første tid kl. ' + timeStr + '\n\n' +
       _footerMany;
   }
   const _sfx = _reminder ? '_sms2' : '_sms';
