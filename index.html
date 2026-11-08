@@ -928,6 +928,7 @@ async function setCardDuration(secs) {
       </div>
       <!-- زر حفظ النوت -->
       <button onclick="saveListNote()" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#00f5c0,#00c496);border:none;border-bottom:4px solid #007a5e;border-radius:12px;color:#050d1a;font-size:16px;font-weight:900;cursor:pointer;">💾 Gem Note til kunde</button>
+      <div id="tr-host-list" style="margin-top:10px;"></div>
     </div>
 
     <!-- شريط سفلي ثابت: اقتراحات + أدوات التنسيق + كيبورد -->
@@ -1357,7 +1358,7 @@ async function setCardDuration(secs) {
       <span style="color:#00e5b0;font-size:14px;font-weight:900;letter-spacing:1px;">⠿ Kunde</span>
       <button onclick="closeAftaleMiniCard()" style="background:#ef4444;border:none;border-radius:8px;color:#fff;width:30px;height:30px;font-size:16px;font-weight:900;cursor:pointer;">✕</button>
     </div>
-    <div id="aftale-mini-body" style="padding:12px 14px;"></div>
+    <div id="aftale-mini-body" style="padding:12px 14px;max-height:calc(100vh - 290px);overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -2866,6 +2867,8 @@ function pinCustomer(id) {
   if (noteEl) noteEl.innerHTML = notesToEditorHtml(c.notes || '');
 
   bar.style.display = 'block';
+  const trHost = document.getElementById('tr-host-list');
+  if (trHost) trHost.innerHTML = trPanelHtml('list');
   if (label) label.textContent = '📝 Note';
 
   // انتقل لوضع النوت تلقائياً
@@ -2898,6 +2901,8 @@ function unpinCustomer() {
   listActiveInput = 'search';
   const bar = document.getElementById('pinned-customer-bar');
   if (bar) bar.style.display = 'none';
+  const trHost = document.getElementById('tr-host-list');
+  if (trHost) trHost.innerHTML = '';
   const noteEl = document.getElementById('list-note-input');
   if (noteEl) noteEl.textContent = '';
   document.getElementById('suggestions-list').innerHTML = '';
@@ -3616,6 +3621,7 @@ function openModal(id) {
           <button onclick="toggleQuickNote()" id="btn-quick-note" style="flex:1;height:42px;background:linear-gradient(180deg,#00b890,#008f6e);border:none;border-bottom:4px solid #005a40;border-radius:8px;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">💾 Gem</button>
         </div>
       </div>
+      <div style="padding:10px 10px 0;background:#f5f0e8;">${trPanelHtml('modal')}</div>
       <div id="quick-note-editor" style="padding:10px;background:#f5f0e8;border-bottom:1px solid #ddd;display:none;">
         <div id="nfmt-toolbar" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;border:1px solid #ccc;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
           <span style="font-size:14px;font-weight:800;color:#334155;">🔠</span>
@@ -4149,6 +4155,99 @@ function openSMSApp(phone, msg) {
     target = '+' + clean;
   }
   window.location.href = 'sms:' + target + '?body=' + encodeURIComponent(msg);
+}
+
+// 🌐 ترجمة عربي ← دنماركي عبر Cloudflare Worker (يُرسَل النص العربي فقط، بدون اسم أو رقم الزبون)
+// خانة واحدة تُستعمل في 3 أماكن: 'modal' (بطاقة الزبون) · 'list' (صفحة القائمة، الزبون المثبّت) · 'mini' (بطاقة Aftaler المصغّرة)
+const TRANSLATE_WORKER_URL = 'https://super-firefly-e74alola-translater.numanrotz21.workers.dev';
+let aftaleMiniId = null;
+
+function trPanelHtml(key) {
+  return '<button type="button" onclick="toggleTranslatePanel(\'' + key + '\')" style="width:100%;height:46px;background:linear-gradient(180deg,#3b82f6,#1d4ed8);border:none;border-bottom:4px solid #1e3a8a;border-radius:10px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;">🌐 عربي ← Dansk (SMS)</button>'
+    + '<div id="translate-panel-' + key + '" style="display:none;margin-top:10px;padding:10px;background:#fff;border:2px solid #3b82f6;border-radius:12px;">'
+    + '<textarea id="tr-ar-' + key + '" dir="rtl" placeholder="اكتب الرسالة بالعربي هنا..." style="width:100%;min-height:90px;box-sizing:border-box;font-size:18px;line-height:1.7;padding:10px;border:1px solid #ccc;border-radius:8px;color:#111;background:#fff;font-family:\'DM Sans\',sans-serif;"></textarea>'
+    + '<button type="button" id="btn-tr-go-' + key + '" onclick="translateArToDa(\'' + key + '\')" style="width:100%;margin-top:8px;height:46px;background:linear-gradient(180deg,#00f5c0,#00c496);border:none;border-bottom:4px solid #007a5e;border-radius:10px;color:#050d1a;font-size:16px;font-weight:800;cursor:pointer;">✨ ترجمة إلى الدنماركية</button>'
+    + '<textarea id="tr-da-' + key + '" dir="ltr" placeholder="Dansk tekst vises her..." style="width:100%;min-height:90px;margin-top:8px;box-sizing:border-box;font-size:18px;line-height:1.7;padding:10px;border:1px solid #ccc;border-radius:8px;color:#111;background:#f0fdf4;font-family:\'DM Sans\',sans-serif;"></textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:8px;">'
+    + '<button type="button" onclick="sendTranslatedSms(\'' + key + '\')" style="flex:1;height:46px;background:linear-gradient(180deg,#22c55e,#15803d);border:none;border-bottom:4px solid #14532d;border-radius:10px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;">📩 إرسال SMS</button>'
+    + '<button type="button" onclick="saveTranslatedAsNote(\'' + key + '\')" style="flex:1;height:46px;background:linear-gradient(180deg,#f5c400,#d4a800);border:none;border-bottom:4px solid #a07800;border-radius:10px;color:#050d1a;font-size:15px;font-weight:800;cursor:pointer;">💾 حفظ كملاحظة</button>'
+    + '</div></div>';
+}
+
+function trCustomer(key) {
+  const id = key === 'modal' ? currentModalId : key === 'list' ? pinnedCustomerId : aftaleMiniId;
+  return customers.find(function(x){ return String(x.id) === String(id); }) || null;
+}
+
+function toggleTranslatePanel(key) {
+  const p = document.getElementById('translate-panel-' + key);
+  if (!p) return;
+  const open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  if (open) { const a = document.getElementById('tr-ar-' + key); if (a) a.focus(); }
+}
+
+async function translateArToDa(key) {
+  const ar = document.getElementById('tr-ar-' + key);
+  const da = document.getElementById('tr-da-' + key);
+  const btn = document.getElementById('btn-tr-go-' + key);
+  const text = ar ? ar.value.trim() : '';
+  if (!text) { showToast('⚠️ اكتب الرسالة بالعربي أولاً'); return; }
+  if (text.length > 1000) { showToast('⚠️ النص طويل جداً (الحد 1000 حرف)'); return; }
+  const oldLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ جارٍ الترجمة...';
+  try {
+    const r = await fetch(TRANSLATE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (!data.translation) throw new Error('empty');
+    da.value = data.translation.trim();
+    showToast('✅ تمت الترجمة — راجع النص ثم أرسل');
+  } catch (e) {
+    showToast('⚠️ فشلت الترجمة — تأكد من الإنترنت وحاول مرة ثانية');
+  }
+  btn.disabled = false;
+  btn.textContent = oldLabel;
+}
+
+function sendTranslatedSms(key) {
+  const c = trCustomer(key);
+  if (!c) { showToast('⚠️ Kunde ikke fundet'); return; }
+  const msg = (document.getElementById('tr-da-' + key).value || '').trim();
+  if (!msg) { showToast('⚠️ ترجم الرسالة أولاً'); return; }
+  openSMSApp(c.phone, msg);
+}
+
+async function saveTranslatedAsNote(key) {
+  const c = trCustomer(key);
+  if (!c) { showToast('⚠️ Kunde ikke fundet'); return; }
+  const msg = (document.getElementById('tr-da-' + key).value || '').trim();
+  if (!msg) { showToast('⚠️ ترجم الرسالة أولاً'); return; }
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const stamp = dd + '-' + mm + '-' + now.getFullYear() + ' 📩 ' + msg.replace(/\n+/g, ' ');
+  if (!c.notes) c.notes = '';
+  c.notes = c.notes.length > 0 ? stamp + String.fromCharCode(10) + c.notes : stamp;
+  await dbPut(c);
+  showToast('💾 تم حفظ الرسالة في ملاحظات ' + c.name);
+  if (key === 'modal') {
+    // أعد رسم البطاقة (ليظهر السطر الجديد) مع إبقاء النصين والخانة مفتوحة، لتتمكن من الإرسال بعد الحفظ
+    const arKeep = document.getElementById('tr-ar-modal').value;
+    openModal(c.id);
+    document.getElementById('tr-ar-modal').value = arKeep;
+    document.getElementById('tr-da-modal').value = msg;
+    document.getElementById('translate-panel-modal').style.display = 'block';
+  } else if (key === 'list') {
+    const noteEl = document.getElementById('list-note-input');
+    if (noteEl) noteEl.innerHTML = notesToEditorHtml(c.notes || '');
+  }
+  // 'mini': البطاقة المصغّرة لا تعرض الملاحظات، يكفي التنبيه
 }
 
 // 🔧 زر توحيد أرقام الزبائن القدامى (يأخذ backup تلقائياً أولاً)
@@ -6146,7 +6245,9 @@ function showAftaleMiniCard(id){
           +(ago?'<div style="margin-top:6px;color:'+agoTxt+';font-weight:800;font-size:15px;">⏱ '+ago+'</div>':'')))
     +aftaleHtml
     +qnoteHtml
-    +'<button onclick="closeAftaleMiniCard();openModal('+c.id+');" style="margin-top:12px;width:100%;padding:12px;background:linear-gradient(180deg,#00f5c0,#00c496);border:none;border-radius:10px;box-shadow:0 3px 0 #007a5e;color:#050d1a;font-size:16px;font-weight:900;cursor:pointer;">🔓 Åbn kort</button>';
+    +'<button onclick="closeAftaleMiniCard();openModal('+c.id+');" style="margin-top:12px;width:100%;padding:12px;background:linear-gradient(180deg,#00f5c0,#00c496);border:none;border-radius:10px;box-shadow:0 3px 0 #007a5e;color:#050d1a;font-size:16px;font-weight:900;cursor:pointer;">🔓 Åbn kort</button>'
+    +'<div style="margin-top:10px;">'+trPanelHtml('mini')+'</div>';
+  aftaleMiniId = c.id;
 
   const card=document.getElementById('aftale-mini-card');
   card.style.background=p.bg;
@@ -6158,12 +6259,14 @@ function showAftaleMiniCard(id){
 }
 
 function closeAftaleMiniCard(){
+  aftaleMiniId = null;
   const c=document.getElementById('aftale-mini-card');
   if(c) c.style.display='none';
 }
 
 // بطاقة مصغّرة لزبون من دفتر الهاتف (بنفسجية)
 function showAftalePhonebookCard(tb){
+  aftaleMiniId = null;
   const body=document.getElementById('aftale-mini-body');
   if(!body) return;
   const phones = (tb.phones && tb.phones.length) ? tb.phones : [];
