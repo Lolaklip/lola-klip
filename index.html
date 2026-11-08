@@ -4205,6 +4205,7 @@ async function translateArToDa(key) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
+    if (data.error) throw new Error(String(data.error).slice(0, 140));
     if (!data.translation) throw new Error('empty');
     da.value = data.translation.trim();
     showToast('✅ تمت الترجمة — راجع النص ثم أرسل');
