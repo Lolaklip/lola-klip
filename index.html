@@ -4209,7 +4209,8 @@ async function translateArToDa(key) {
     da.value = data.translation.trim();
     showToast('✅ تمت الترجمة — راجع النص ثم أرسل');
   } catch (e) {
-    showToast('⚠️ فشلت الترجمة — تأكد من الإنترنت وحاول مرة ثانية');
+    // رمز الخطأ يساعد في معرفة السبب: Failed to fetch = حجب/إنترنت · HTTP 403 = عنوان الصفحة غير مسموح · empty = ردّ فارغ من Claude
+    showToast('⚠️ فشلت الترجمة (' + (e && e.message ? e.message : 'خطأ') + ') — حاول مرة ثانية');
   }
   btn.disabled = false;
   btn.textContent = oldLabel;
