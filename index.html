@@ -3893,13 +3893,13 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
         'Vi glæder os til at se dig til dine aftaler hos os.\n\n' +
         '📋 Du har i alt ' + n + ' tider hos os ' + _dayWord + '.\n\n' +
         _dateLine + '\n' +
-        group.map(function(g){ return '• Kl. ' + g.time + _typeTxt(g.type); }).join('\n') + '\n\n' +
+        group.map(function(g){ return '• Kl. ' + g.time; }).join('\n') + '\n\n' +
         _footerMany;
     }
     // tallet er rettet manuelt → kun antal (tiderne kendes ikke)
     return pre +
       'Hej\n' +
-      'Vi glæder os til at se dig til din aftale hos os' + _klipTxt + '.\n\n' +
+      'Vi glæder os til at se dig til dine aftaler hos os.\n\n' +
       '📋 Du har i alt ' + n + ' tider hos os ' + _dayWord + '.\n\n' +
       _dateLine + '\n' +
       '⏰ Første tid kl. ' + timeStr + '\n\n' +
