@@ -2300,7 +2300,7 @@ function findUpcomingAftalerForId(idNum) {
     if (dateKey < todayKey) return; // اليوم أو المستقبل فقط (المقارنة النصية تعمل مع YYYY-MM-DD)
     const dayData = data[dateKey] || {};
     Object.keys(dayData).forEach(function(slotKey){
-      if (slotKey.endsWith('_status')) return;
+      if (slotKey.endsWith('_status') || slotKey.endsWith('_sms') || slotKey.endsWith('_sms2')) return;
       const val = dayData[slotKey];
       if (!val) return;
       const m = String(val).trim().match(/(\d{3,4})/);
@@ -2366,8 +2366,137 @@ function aftaleBadgeHTML(idNum) {
   </div>`;
 }
 
+// ══════════════════════════════════════════
+//  x96: المواعيد القادمة بتفاصيل كاملة
+//  - بطاقة تظهر فور تسجيل موعد في خانة المواعيد (إذا للزبون مواعيد أخرى)
+//  - نفس الصناديق تُستخدم في بطاقة خانة البحث أعلى صفحة المواعيد
+// ══════════════════════════════════════════
+function _upEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _upMinutes(hm) {
+  const p = String(hm).split(':');
+  return (parseInt(p[0],10) || 0) * 60 + (parseInt(p[1],10) || 0);
+}
+
+// كل المواعيد القادمة لزبون برقم ID — مع التفاصيل (العمود، الحالة، الرسائل)
+// keepDateKey/keepDataKey: الموعد الذي سُجّل الآن (يُعلَّم isNew ولا يُحذف حتى لو مرّ وقته)
+function findUpcomingAftalerFull(idNum, keepDateKey, keepDataKey) {
+  if (idNum === undefined || idNum === null || idNum === '') return [];
+  const target = String(idNum);
+  const data = loadAftalerData();
+  const now = new Date();
+  const pad = function(n){ return String(n).padStart(2,'0'); };
+  const todayKey = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const out = [];
+  Object.keys(data).forEach(function(dateKey){
+    if (dateKey < todayKey) return;
+    const dayData = data[dateKey] || {};
+    Object.keys(dayData).forEach(function(dataKey){
+      if (/_(status|sms|sms2)$/.test(dataKey)) return;
+      const val = dayData[dataKey];
+      if (!val) return;
+      const m = String(val).trim().match(/(\d{3,4})/);
+      if (!m || m[1] !== target) return;
+      const time = dataKey.replace(/_R$/, '');
+      const isNew = (dateKey === keepDateKey && dataKey === keepDataKey);
+      // موعد اليوم الذي مرّ وقته لا يُعتبر قادماً (إلا الموعد الذي سُجّل الآن)
+      if (!isNew && dateKey === todayKey && _upMinutes(time) < nowMin) return;
+      out.push({
+        dateKey: dateKey, time: time, dataKey: dataKey, isNew: isNew,
+        text: String(val).trim(),
+        status: dayData[dataKey + '_status'] || '',
+        sms1: dayData[dataKey + '_sms'] || '',
+        sms2: dayData[dataKey + '_sms2'] || ''
+      });
+    });
+  });
+  out.sort(function(a,b){
+    if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+    return _upMinutes(a.time) - _upMinutes(b.time);
+  });
+  return out;
+}
+
+// صندوق موعد واحد بالتفاصيل الكاملة
+function aftaleDetailBoxHTML(a, c) {
+  const type = getAftaleType(a.text);
+  const typeTxt = type === 'Mend' ? '👨 Herre klip' : (type === 'Dame' ? '👩 Dame klip' : '');
+  const cm = String(a.text).match(/(?:^|[^a-zA-Z])[hdHD][\s]?([rlRL])(?![a-zA-Z])/);
+  const who = cm ? (cm[1].toLowerCase() === 'r' ? '✂️ Roman' : '✂️ Lola') : '';
+  const stMap = { ok:'✅ Mødte op', no:'❌ Mødte ikke op', afbud:'🟡 Afbud', syg:'🟣 Syg' };
+  const stTxt = stMap[a.status] || '';
+  const chip = function(t, bg, col){
+    return '<span style="display:inline-block;background:'+bg+';color:'+col+';border-radius:8px;padding:3px 9px;font-size:14px;font-weight:800;margin:4px 6px 0 0;">'+t+'</span>';
+  };
+  let chips = '';
+  if (typeTxt) chips += chip(typeTxt, '#e0f2fe', '#0369a1');
+  if (who)     chips += chip(who, '#f1f5f9', '#334155');
+  if (stTxt)   chips += chip(stTxt, '#fef9c3', '#854d0e');
+  if (a.sms1)  chips += chip('📩 Booking-SMS sendt', '#dcfce7', '#166534');
+  if (a.sms2)  chips += chip('🔔 Påmindelse sendt', '#ffedd5', '#9a3412');
+  if (!a.sms1 && !a.sms2) chips += chip('✉️ Ingen SMS sendt endnu', '#f1f5f9', '#64748b');
+  const vt = c ? aftaleVisitText(c, a.text) : '';
+  const vline = vt ? '<div style="font-size:14px;font-weight:800;color:#1d4ed8;margin-top:6px;">'+_upEsc(vt)+'</div>' : '';
+  const newBadge = a.isNew
+    ? '<span style="flex-shrink:0;background:#22c55e;color:#fff;border-radius:8px;padding:3px 10px;font-size:13px;font-weight:900;">NY</span>'
+    : '';
+  const idAttr = c ? _upEsc(c.idNum || '') : '';
+  return '<div style="background:#fff;border:2px solid '+(a.isNew?'#22c55e':'#00c4ff')+';border-radius:12px;padding:10px 12px;margin-top:8px;box-sizing:border-box;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+      + '<div style="font-size:18px;font-weight:900;color:#0c4a6e;line-height:1.3;">📅 '+_upEsc(formatAftaleLabel(a.dateKey, a.time))+'</div>'
+      + newBadge
+    + '</div>'
+    + '<div style="margin-top:6px;font-size:17px;font-weight:800;color:#111;background:#f1f5f9;border-radius:8px;padding:6px 10px;word-break:break-word;white-space:pre-wrap;">'+_upEsc(a.text)+'</div>'
+    + '<div>'+chips+'</div>'
+    + vline
+    + '<button onclick="event.stopPropagation();closeUpcomingAftalerCard();try{closeAftaleMiniCard();}catch(e){}openAftalerOnDate(\''+a.dateKey+'\',\''+idAttr+'\')" style="margin-top:8px;width:100%;padding:9px;background:#00c4ff;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;">📆 Åbn dagen</button>'
+  + '</div>';
+}
+
+function closeUpcomingAftalerCard() {
+  const o = document.getElementById('aftale-upcoming-overlay');
+  if (o) o.remove();
+}
+
+// تظهر فور حفظ موعد في الخانة: كل المواعيد القادمة للزبون (إن وُجدت مواعيد أخرى غير الجديد)
+function showUpcomingAftalerCard(idNum, dateKey, dataKey) {
+  closeUpcomingAftalerCard();
+  const list = findUpcomingAftalerFull(idNum, dateKey, dataKey);
+  const others = list.filter(function(a){ return !a.isNew; });
+  if (!others.length) return;
+  const c = customers.find(function(x){ return (x.idNum || '') === String(idNum); });
+  let name = c ? (c.name || '') : '';
+  if (!name) {
+    try {
+      const tb = loadTelefonbog().find(function(e){ return String(e.code || '') === String(idNum); });
+      if (tb) name = tb.name || '';
+    } catch(e) {}
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'aftale-upcoming-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:70px 14px 14px;box-sizing:border-box;';
+  overlay.onclick = function(e){ if (e.target === overlay) closeUpcomingAftalerCard(); };
+  overlay.innerHTML =
+    '<div style="background:#f0f9ff;border:3px solid #00c4ff;border-radius:16px;width:100%;max-width:560px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 34px rgba(0,0,0,0.5);overflow:hidden;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0d1b2a;padding:10px 14px;">'
+        + '<div style="min-width:0;">'
+          + '<div style="font-size:13px;font-weight:900;color:#fbbf24;">⚠️ Kunden har allerede '+others.length+' kommende '+(others.length === 1 ? 'aftale' : 'aftaler')+'</div>'
+          + '<div style="font-size:19px;font-weight:900;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_upEsc(name || 'Kunde')+' · ID '+_upEsc(idNum)+'</div>'
+        + '</div>'
+        + '<button onclick="closeUpcomingAftalerCard()" style="flex-shrink:0;background:#ef4444;border:none;border-radius:8px;color:#fff;width:36px;height:36px;font-size:18px;font-weight:900;cursor:pointer;">✕</button>'
+      + '</div>'
+      + '<div style="padding:4px 12px 12px;overflow-y:auto;">'
+        + list.map(function(a){ return aftaleDetailBoxHTML(a, c); }).join('')
+      + '</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+}
+
 function cardHTML(c, showAftale) {
-  const initials = c.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const initials =c.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const inactive = isInactive(c);
   const lastVisit = c.lastVisit || null;
   const lastMend = extractLastVisitByType(c.notes, 'Mend');
@@ -6126,9 +6255,10 @@ function showAftaleMiniCard(id){
     ? '<div style="margin-top:10px;background:'+qnBg+';border:2px solid #fcd34d;border-radius:10px;padding:8px 10px;max-height:120px;overflow-y:auto;font-size:16px;font-weight:700;color:#92400e;line-height:1.5;white-space:pre-wrap;word-break:break-word;">'+notesToEditorHtml(c.quickNote)+'</div>'
     : '<div style="margin-top:10px;color:'+(colored?'rgba(255,255,255,0.85)':'#94a3b8')+';font-size:13px;font-style:italic;">Ingen hurtig note</div>';
 
-  const upcoming = (typeof findUpcomingAftalerForId === 'function') ? findUpcomingAftalerForId(c.idNum) : [];
+  const upcoming = (typeof findUpcomingAftalerFull === 'function') ? findUpcomingAftalerFull(c.idNum) : [];
   const aftaleHtml = upcoming.length
-    ? '<div style="margin-top:10px;background:'+(colored?'#ffffff':'#e6f8ff')+';border:2px solid #00c4ff;border-radius:10px;padding:7px 12px;font-size:15px;font-weight:800;color:#0369a1;line-height:1.4;">📅 '+formatAftaleLabel(upcoming[0].dateKey, upcoming[0].time)+'<div style="font-size:14px;font-weight:800;color:#1d4ed8;margin-top:2px;">'+aftaleVisitText(c, upcoming[0].text)+'</div>'+(upcoming.length>1?(' <span style="background:#00c4ff;color:#fff;border-radius:12px;padding:1px 8px;font-size:12px;font-weight:900;">+'+(upcoming.length-1)+'</span>'):'')+'</div>'
+    ? '<div style="margin-top:10px;font-size:13px;font-weight:900;letter-spacing:0.5px;color:'+(colored?'#ffffff':'#0369a1')+';">📅 KOMMENDE AFTALER · '+upcoming.length+'</div>'
+      + '<div style="max-height:280px;overflow-y:auto;">'+upcoming.map(function(a){ return aftaleDetailBoxHTML(a, c); }).join('')+'</div>'
     : '<div style="margin-top:10px;color:'+(colored?'rgba(255,255,255,0.85)':'#94a3b8')+';font-size:14px;font-weight:700;">📅 Ingen kommende aftale</div>';
 
   const body=document.getElementById('aftale-mini-body');
@@ -6550,6 +6680,11 @@ function renderAftalerSchedule() {
       }
       saveAftalerData(allData);
       renderAftalerSchedule();
+      // x96: عند تسجيل موعد برقم ID → تظهر فوراً مواعيد الزبون القادمة (إن وُجدت)
+      try {
+        const _idm = this.value.trim().match(/^\s*(\d{3,4})\b/);
+        if (_idm) showUpcomingAftalerCard(_idm[1], key, dataKey);
+      } catch(e) {}
     });
     inputWrap.appendChild(input);
     col.appendChild(inputWrap);
