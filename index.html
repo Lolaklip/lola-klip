@@ -2452,7 +2452,7 @@ function aftaleDetailBoxHTML(a, c) {
     + '<div style="margin-top:6px;font-size:17px;font-weight:800;color:#111;background:#f1f5f9;border-radius:8px;padding:6px 10px;word-break:break-word;white-space:pre-wrap;">'+_upEsc(a.text)+'</div>'
     + '<div>'+chips+'</div>'
     + vline
-    + '<button onclick="event.stopPropagation();closeUpcomingAftalerCard();try{closeAftaleMiniCard();}catch(e){}openAftalerOnDate(\''+a.dateKey+'\',\''+idAttr+'\')" style="margin-top:8px;width:100%;padding:9px;background:#00c4ff;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;">📆 Åbn dagen</button>'
+    + '<button onclick="event.stopPropagation();closeUpcomingAftalerCard();try{closeAftaleMiniCard();}catch(e){}var _so=document.getElementById(\'aftale-sms-overlay\');if(_so)_so.remove();openAftalerOnDate(\''+a.dateKey+'\',\''+idAttr+'\')" style="margin-top:8px;width:100%;padding:9px;background:#00c4ff;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;">📆 Åbn dagen</button>'
   + '</div>';
 }
 
@@ -2461,12 +2461,12 @@ function closeUpcomingAftalerCard() {
   if (o) o.remove();
 }
 
-// تظهر فور حفظ موعد في الخانة: كل المواعيد القادمة للزبون (إن وُجدت مواعيد أخرى غير الجديد)
-function showUpcomingAftalerCard(idNum, dateKey, dataKey) {
-  closeUpcomingAftalerCard();
+// لوحة المواعيد القادمة (HTML). embedded=true → داخل شاشة SMS (بدون الموعد الذي تُرسل له الرسالة)
+function aftaleUpcomingPanelHTML(idNum, dateKey, dataKey, embedded) {
   const list = findUpcomingAftalerFull(idNum, dateKey, dataKey);
   const others = list.filter(function(a){ return !a.isNew; });
-  if (!others.length) return;
+  if (!others.length) return '';
+  const shown = embedded ? others : list;
   const c = customers.find(function(x){ return (x.idNum || '') === String(idNum); });
   let name = c ? (c.name || '') : '';
   if (!name) {
@@ -2475,23 +2475,31 @@ function showUpcomingAftalerCard(idNum, dateKey, dataKey) {
       if (tb) name = tb.name || '';
     } catch(e) {}
   }
-  const overlay = document.createElement('div');
-  overlay.id = 'aftale-upcoming-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:70px 14px 14px;box-sizing:border-box;';
-  overlay.onclick = function(e){ if (e.target === overlay) closeUpcomingAftalerCard(); };
-  overlay.innerHTML =
-    '<div style="background:#f0f9ff;border:3px solid #00c4ff;border-radius:16px;width:100%;max-width:560px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 34px rgba(0,0,0,0.5);overflow:hidden;">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0d1b2a;padding:10px 14px;">'
+  const closeJs = embedded ? "this.closest('.up-panel').remove()" : 'closeUpcomingAftalerCard()';
+  return '<div class="up-panel" style="background:#f0f9ff;border:3px solid #00c4ff;border-radius:16px;width:100%;max-width:560px;max-height:'+(embedded ? '34vh' : '82vh')+';display:flex;flex-direction:column;box-shadow:0 12px 34px rgba(0,0,0,0.5);overflow:hidden;box-sizing:border-box;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0d1b2a;padding:10px 14px;flex-shrink:0;">'
         + '<div style="min-width:0;">'
           + '<div style="font-size:13px;font-weight:900;color:#fbbf24;">⚠️ Kunden har allerede '+others.length+' kommende '+(others.length === 1 ? 'aftale' : 'aftaler')+'</div>'
           + '<div style="font-size:19px;font-weight:900;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_upEsc(name || 'Kunde')+' · ID '+_upEsc(idNum)+'</div>'
         + '</div>'
-        + '<button onclick="closeUpcomingAftalerCard()" style="flex-shrink:0;background:#ef4444;border:none;border-radius:8px;color:#fff;width:36px;height:36px;font-size:18px;font-weight:900;cursor:pointer;">✕</button>'
+        + '<button onclick="'+closeJs+'" style="flex-shrink:0;background:#ef4444;border:none;border-radius:8px;color:#fff;width:36px;height:36px;font-size:18px;font-weight:900;cursor:pointer;">✕</button>'
       + '</div>'
       + '<div style="padding:4px 12px 12px;overflow-y:auto;">'
-        + list.map(function(a){ return aftaleDetailBoxHTML(a, c); }).join('')
+        + shown.map(function(a){ return aftaleDetailBoxHTML(a, c); }).join('')
       + '</div>'
     + '</div>';
+}
+
+// تظهر فور حفظ موعد في الخانة: كل المواعيد القادمة للزبون (إن وُجدت مواعيد أخرى غير الجديد)
+function showUpcomingAftalerCard(idNum, dateKey, dataKey) {
+  closeUpcomingAftalerCard();
+  const html = aftaleUpcomingPanelHTML(idNum, dateKey, dataKey, false);
+  if (!html) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'aftale-upcoming-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:70px 14px 14px;box-sizing:border-box;';
+  overlay.onclick = function(e){ if (e.target === overlay) closeUpcomingAftalerCard(); };
+  overlay.innerHTML = html;
   document.body.appendChild(overlay);
 }
 
@@ -4038,7 +4046,8 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
   const opts = {
     count: group.length,
     build: buildMsg,
-    markKeys: group.map(function(g){ return g.key + _sfx; })
+    markKeys: group.map(function(g){ return g.key + _sfx; }),
+    upcoming: custId ? { idNum: String(custId), dateKey: dateKey, dataKey: selfKey } : null
   };
   msg = buildMsg(group.length);
 
@@ -4090,8 +4099,13 @@ function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon, op
   const overlay = document.createElement('div');
   overlay.id = 'aftale-sms-overlay';
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:20px;padding:20px;width:100%;max-width:480px;">
+  // x96: بطاقة المواعيد القادمة تظهر مع صفحة SMS معاً (إن كان للزبون مواعيد أخرى)
+  let _upHTML = '';
+  try {
+    if (opts && opts.upcoming) _upHTML = aftaleUpcomingPanelHTML(opts.upcoming.idNum, opts.upcoming.dateKey, opts.upcoming.dataKey, true);
+  } catch(e) { _upHTML = ''; }
+  const _dlg = `
+    <div style="background:#fff;border-radius:20px;padding:20px;width:100%;max-width:480px;box-sizing:border-box;">
       <div style="font-size:19px;font-weight:900;color:#1d4ed8;margin-bottom:4px;">${phaseIcon || '💬'} Send ${phaseLabel || 'SMS'} til ${c.id ? c.id + ' ' : ''}${c.name}?</div>
       <div style="font-size:15px;font-weight:700;color:#16a34a;margin-bottom:12px;">📞 ${c.phone}</div>
       ${cntRow}
@@ -4101,6 +4115,13 @@ function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon, op
         <button id="aftale-sms-send-btn" style="flex:1;padding:14px;background:linear-gradient(180deg,#22c55e,#16a34a);border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">${phaseIcon || '📩'} Send SMS</button>
       </div>
     </div>`;
+  if (_upHTML) {
+    // شاشة واحدة قابلة للتمرير: البطاقة في الأعلى وتحتها صفحة SMS
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:99999;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:14px;box-sizing:border-box;';
+    overlay.innerHTML = '<div style="margin:auto 0;width:100%;max-width:560px;display:flex;flex-direction:column;align-items:center;gap:12px;">' + _upHTML + _dlg + '</div>';
+  } else {
+    overlay.innerHTML = _dlg;
+  }
   document.body.appendChild(overlay);
 
   // x94: عدّاد عدد المواعيد (− / +) — يحدّث نص الرسالة فوراً
@@ -6655,9 +6676,13 @@ function renderAftalerSchedule() {
         if (!input.value.trim()) return;
         _lpTimer = setTimeout(function(){
           _lpTimer = null;
-          input.blur();
-          if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch(e){} }
-          triggerAftaleSMS(input.value, key, slotKey, colSide);
+          // x96: أثناء الضغط المطول لا تظهر بطاقة "بعد الحفظ" — تظهر مع صفحة SMS
+          window._aftaleLPActive = true;
+          try {
+            input.blur();
+            if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch(e){} }
+            triggerAftaleSMS(input.value, key, slotKey, colSide);
+          } finally { window._aftaleLPActive = false; }
         }, 650);
       };
       const cancelLP = function(){ if (_lpTimer){ clearTimeout(_lpTimer); _lpTimer = null; } };
@@ -6683,7 +6708,7 @@ function renderAftalerSchedule() {
       // x96: عند تسجيل موعد برقم ID → تظهر فوراً مواعيد الزبون القادمة (إن وُجدت)
       try {
         const _idm = this.value.trim().match(/^\s*(\d{3,4})\b/);
-        if (_idm) showUpcomingAftalerCard(_idm[1], key, dataKey);
+        if (_idm && !window._aftaleLPActive) showUpcomingAftalerCard(_idm[1], key, dataKey);
       } catch(e) {}
     });
     inputWrap.appendChild(input);
