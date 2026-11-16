@@ -454,6 +454,46 @@ function expandQNote(el) {
   el.style.overflow = 'visible';
 }
 
+// x99: سطرا Mend/Dame يمتدّان لعرض البطاقة كاملاً (تحت عمود الصورة) فلا ينكسر النص ولا يخرج من الصندوق
+function fitVisitRows() {
+  const list = document.querySelectorAll('.customer-card .visit-rows');
+  if (!list.length) return;
+  list.forEach(function(rows){
+    const info = rows.closest('.card-info');
+    const left = info ? info.previousElementSibling : null;
+    if (!info || !left) return;
+    const diff = Math.round(info.getBoundingClientRect().left - left.getBoundingClientRect().left);
+    if (diff > 0) rows.style.marginLeft = (-diff) + 'px';
+    // لا تلامس عمود الصورة (أزرار L/R وشارة Hos): إن كان عمود الصورة أطول، انزل تحته
+    rows.style.marginTop = '0px';
+    const gap = Math.ceil(left.getBoundingClientRect().bottom + 8 - rows.getBoundingClientRect().top);
+    rows.style.marginTop = (diff > 0 && gap > 0) ? (gap + 'px') : '';
+    // شاشة ضيقة جداً: صغّر الخط درجة درجة حتى يتسع السطر (دون كسر ودون خروج من الصندوق)
+    rows.querySelectorAll(':scope > div').forEach(function(row){
+      const d = row.children[1], a = row.children[2];
+      if (!d || !a) return;
+      d.style.fontSize = ''; a.style.fontSize = '';
+      let fs = 19, n = 0;
+      while (row.scrollWidth > row.clientWidth + 1 && n < 7) {
+        n++; fs--;
+        d.style.fontSize = fs + 'px';
+        a.style.fontSize = Math.max(10, 13 - Math.ceil(n / 2)) + 'px';
+      }
+    });
+  });
+}
+(function(){
+  let raf = null;
+  const sched = function(){ if (raf) return; raf = requestAnimationFrame(function(){ raf = null; try { fitVisitRows(); } catch(e) {} }); };
+  const start = function(){
+    new MutationObserver(sched).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', sched);
+    window.addEventListener('orientationchange', sched);
+    sched();
+  };
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
+
 // x98: لا حذف صامت بعد الآن — عند تجاوز 100 كلمة يظهر تنبيه فقط، والنص يبقى كاملاً
 function limitQNoteWords(el) {
   const words = (el.innerText||'').trim().split(/\s+/).filter(w => w);
@@ -1382,7 +1422,7 @@ async function setCardDuration(secs) {
   </div>
 
   <!-- بطاقة الزبون المصغّرة العائمة -->
-  <div id="aftale-mini-card" style="display:none;position:fixed;top:200px;right:170px;z-index:9999;background:#fffef7;border:3px solid #00e5b0;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,0.55);width:340px;max-width:90vw;">
+  <div id="aftale-mini-card" style="display:none;position:fixed;top:200px;right:170px;z-index:9999;background:#fffef7;border:3px solid #00e5b0;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,0.55);width:420px;max-width:94vw;">
     <div id="aftale-mini-handle" style="cursor:move;touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0d1b2a;border-radius:11px 11px 0 0;padding:8px 12px;">
       <span style="color:#00e5b0;font-size:14px;font-weight:900;letter-spacing:1px;">⠿ Kunde</span>
       <button onclick="closeAftaleMiniCard()" style="background:#ef4444;border:none;border-radius:8px;color:#fff;width:30px;height:30px;font-size:16px;font-weight:900;cursor:pointer;">✕</button>
@@ -2610,9 +2650,9 @@ function cardHTML(c, showAftale) {
             <div style="font-size:32px;font-weight:900;color:#0d9488;line-height:1;">${(c.notes||'').split('\n').filter(l=>l.startsWith('✅') || /\d{2}[-\.]\d{2}[-\.]\d{2,4}/.test(l)).length}</div>
           </div>
         </div>
-        ${isCouple ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:8px;width:100%;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:5px 12px;box-sizing:border-box;"><span style="background:#2563eb;color:#fff;border-radius:8px;padding:2px 8px;font-size:14px;font-weight:900;white-space:nowrap;">👨 Mend</span><span style="font-size:19px;font-weight:900;color:#1e293b;">${formatDate(lastMend)}</span><span style="font-size:13px;font-weight:800;color:#2563eb;margin-left:auto;white-space:nowrap;">⏱ ${monthsAgoText(lastMend)}</span></div>
-          <div style="display:flex;align-items:center;gap:8px;width:100%;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:5px 12px;box-sizing:border-box;"><span style="background:#ec4899;color:#fff;border-radius:8px;padding:2px 8px;font-size:14px;font-weight:900;white-space:nowrap;">👩 Dame</span><span style="font-size:19px;font-weight:900;color:#1e293b;">${formatDate(lastDame)}</span><span style="font-size:13px;font-weight:800;color:#ec4899;margin-left:auto;white-space:nowrap;">⏱ ${monthsAgoText(lastDame)}</span></div>
+        ${isCouple ? `<div class="visit-rows" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;width:100%;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:5px 12px;box-sizing:border-box;white-space:nowrap;"><span style="background:#2563eb;color:#fff;border-radius:8px;padding:2px 8px;font-size:14px;font-weight:900;white-space:nowrap;">👨 Mend</span><span style="font-size:19px;font-weight:900;color:#1e293b;white-space:nowrap;">${formatDate(lastMend)}</span><span style="font-size:13px;font-weight:800;color:#2563eb;margin-left:auto;white-space:nowrap;">⏱ ${monthsAgoText(lastMend)}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;width:100%;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:5px 12px;box-sizing:border-box;white-space:nowrap;"><span style="background:#ec4899;color:#fff;border-radius:8px;padding:2px 8px;font-size:14px;font-weight:900;white-space:nowrap;">👩 Dame</span><span style="font-size:19px;font-weight:900;color:#1e293b;white-space:nowrap;">${formatDate(lastDame)}</span><span style="font-size:13px;font-weight:800;color:#ec4899;margin-left:auto;white-space:nowrap;">⏱ ${monthsAgoText(lastDame)}</span></div>
         </div>` : `<div style="display:block;width:100%;background:${lastVisit ? '#f1f5f9' : '#fef3c7'};color:${lastVisit ? '#1e293b' : '#92400e'};font-size:22px;font-weight:900;padding:5px 14px;border-radius:10px;margin-bottom:6px;box-sizing:border-box;border:1px solid ${lastVisit ? '#e2e8f0' : '#fcd34d'};">${lastVisit ? formatDate(lastVisit) + (c.lastVisitTime ? '<span style="font-size:15px;font-weight:700;color:#64748b;margin-left:8px;">kl. ' + c.lastVisitTime + '</span>' : '') : '⚠️ Ingen besøg'}</div>`}
         <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;">
           <div id="qnote-${c.id}" class="nfmt-editable" contenteditable="true" data-ph="📝 Hurtig note..." onclick="event.stopPropagation()" onfocus="showQnoteTools(this);expandQNote(this)" onblur="hideQnoteTools();saveQNote(${c.id},this)" oninput="limitQNoteWords(this)" style="flex:1;min-width:0;min-height:170px;max-height:none;height:auto;background:#fffbea;color:#92400e;font-size:20px;font-weight:700;padding:12px 14px;border-radius:12px;box-sizing:border-box;border:2px solid #fcd34d;overflow:visible;font-family:'DM Sans',sans-serif;line-height:1.5;white-space:pre-wrap;word-break:break-word;outline:none;">${notesToEditorHtml(c.quickNote||'')}</div>
@@ -6333,8 +6373,8 @@ function showAftaleMiniCard(id){
     +'</div>'
     +(isCouple
       ? ('<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">'
-          +'<div style="display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #bfdbfe;border-radius:10px;padding:6px 10px;"><span style="background:#2563eb;color:#fff;border-radius:8px;padding:2px 8px;font-size:13px;font-weight:900;white-space:nowrap;">👨 Mend</span><span style="font-size:16px;font-weight:900;color:#1e293b;">'+formatDate(lastMend)+'</span><span style="font-size:12px;font-weight:800;color:#2563eb;margin-left:auto;white-space:nowrap;">⏱ '+monthsAgoText(lastMend)+'</span></div>'
-          +'<div style="display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #fbcfe8;border-radius:10px;padding:6px 10px;"><span style="background:#ec4899;color:#fff;border-radius:8px;padding:2px 8px;font-size:13px;font-weight:900;white-space:nowrap;">👩 Dame</span><span style="font-size:16px;font-weight:900;color:#1e293b;">'+formatDate(lastDame)+'</span><span style="font-size:12px;font-weight:800;color:#ec4899;margin-left:auto;white-space:nowrap;">⏱ '+monthsAgoText(lastDame)+'</span></div>'
+          +'<div style="display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #bfdbfe;border-radius:10px;padding:6px 10px;"><span style="background:#2563eb;color:#fff;border-radius:8px;padding:2px 8px;font-size:13px;font-weight:900;white-space:nowrap;">👨 Mend</span><span style="font-size:16px;font-weight:900;color:#1e293b;white-space:nowrap;">'+formatDate(lastMend)+'</span><span style="font-size:12px;font-weight:800;color:#2563eb;margin-left:auto;white-space:nowrap;">⏱ '+monthsAgoText(lastMend)+'</span></div>'
+          +'<div style="display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #fbcfe8;border-radius:10px;padding:6px 10px;"><span style="background:#ec4899;color:#fff;border-radius:8px;padding:2px 8px;font-size:13px;font-weight:900;white-space:nowrap;">👩 Dame</span><span style="font-size:16px;font-weight:900;color:#1e293b;white-space:nowrap;">'+formatDate(lastDame)+'</span><span style="font-size:12px;font-weight:800;color:#ec4899;margin-left:auto;white-space:nowrap;">⏱ '+monthsAgoText(lastDame)+'</span></div>'
         +'</div>')
       : ('<div style="margin-top:10px;background:'+lastBg+';color:'+lastTxt+';border-radius:10px;padding:7px 12px;font-size:16px;font-weight:800;">'+lastV+'</div>'
           +(ago?'<div style="margin-top:6px;color:'+agoTxt+';font-weight:800;font-size:15px;">⏱ '+ago+'</div>':'')))
