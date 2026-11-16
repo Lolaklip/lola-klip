@@ -454,13 +454,43 @@ function expandQNote(el) {
   el.style.overflow = 'visible';
 }
 
+// x98: لا حذف صامت بعد الآن — عند تجاوز 100 كلمة يظهر تنبيه فقط، والنص يبقى كاملاً
 function limitQNoteWords(el) {
   const words = (el.innerText||'').trim().split(/\s+/).filter(w => w);
-  if (words.length > 30) {
-    el.textContent = words.slice(0, 30).join(' ');
-    nfmtCaretToEnd(el);
+  if (words.length > 100) {
+    if (!el._qnOver) { el._qnOver = true; try { showToast('⚠️ Noten har over 100 ord'); } catch(e){} }
+  } else {
+    el._qnOver = false;
   }
+  qnoteAutoSave(el);
 }
+
+// x98: حفظ تلقائي أثناء الكتابة (بعد توقف 600ms) — لا ننتظر الخروج من الخانة
+let _qnAutoT = null;
+function qnoteAutoSave(el) {
+  clearTimeout(_qnAutoT);
+  _qnAutoT = setTimeout(function(){ qnoteSaveNow(el); }, 600);
+}
+function qnoteSaveNow(el) {
+  try {
+    if (!el || !el.isConnected || !/^qnote-\d+$/.test(el.id)) return;
+    const id = parseInt(el.id.slice(6), 10);
+    const c = customers.find(x => x.id === id);
+    if (!c) return;
+    const val = editorHtmlToNotes(el);
+    if (val === (c.quickNote || '')) return;
+    c.quickNote = val;
+    dbPut(c);
+  } catch(e) {}
+}
+// حفظ فوري عند قفل الشاشة / الانتقال لتطبيق آخر / إغلاق الصفحة
+function qnoteFlushActive() {
+  clearTimeout(_qnAutoT);
+  const a = document.activeElement;
+  if (a && /^qnote-\d+$/.test(a.id)) qnoteSaveNow(a);
+}
+document.addEventListener('visibilitychange', function(){ if (document.hidden) qnoteFlushActive(); });
+window.addEventListener('pagehide', qnoteFlushActive);
 
 function nfmtCaretToEnd(el){
   try{
@@ -3788,7 +3818,8 @@ function renderNoteText(text) {
     style += 'font-weight:700;';
     return '<span style="'+style+'">'+inner+'</span>';
   });
-  return t;
+  // x98: علامات يتيمة (تنسيق ممتد على أسطر) لا تُعرض رموزاً
+  return t.replace(/⟦[^⟧]*⟧/g, '').replace(/⟦\/⟧/g, '');
 }
 
           if (!c.notes) return '<span style="color:#999;font-style:italic;">Ingen noter</span>';
@@ -5068,22 +5099,23 @@ function nfmtEscape(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt
 // نص (مع علامات) → HTML للخانة الذكية
 function notesToEditorHtml(text){
   text = text || '';
-  return text.split('\n').map(function(line){
-    let out=''; let last=0; let m;
-    const re = /⟦([^⟧]*)⟧([\s\S]*?)⟦\/⟧/g;
-    while((m=re.exec(line))){
-      out += nfmtEscape(line.slice(last, m.index));
-      let s='', c='';
-      m[1].split(';').forEach(function(p){ const kv=p.split(':'); if(kv[0]==='s') s=kv[1]; if(kv[0]==='c') c=kv[1]; });
-      let style='font-weight:700;';
-      if(s) style += 'font-size:'+s+'em;';
-      if(c && NFMT_COLORS[c]) style += 'color:'+NFMT_COLORS[c]+';';
-      out += '<span class="nfmt" data-s="'+(s||'')+'" data-c="'+(c||'')+'" style="'+style+'">'+nfmtEscape(m[2])+'</span>';
-      last = re.lastIndex;
-    }
-    out += nfmtEscape(line.slice(last));
-    return out;
-  }).join('<br>');
+  // x98: العلامات تُقرأ على النص كله (لا سطراً سطراً) — فالتنسيق الممتد على أسطر لا يظهر كرموز
+  const nl = function(s){ return nfmtEscape(s).replace(/\n/g, '<br>'); };
+  let out=''; let last=0; let m;
+  const re = /⟦([^⟧]*)⟧([\s\S]*?)⟦\/⟧/g;
+  while((m=re.exec(text))){
+    out += nl(text.slice(last, m.index));
+    let s='', c='';
+    m[1].split(';').forEach(function(p){ const kv=p.split(':'); if(kv[0]==='s') s=kv[1]; if(kv[0]==='c') c=kv[1]; });
+    let style='font-weight:700;';
+    if(s) style += 'font-size:'+s+'em;';
+    if(c && NFMT_COLORS[c]) style += 'color:'+NFMT_COLORS[c]+';';
+    out += '<span class="nfmt" data-s="'+(s||'')+'" data-c="'+(c||'')+'" style="'+style+'">'+nl(m[2])+'</span>';
+    last = re.lastIndex;
+  }
+  out += nl(text.slice(last));
+  // علامات يتيمة (بلا نهاية/بداية) من نسخ قديمة: تُزال بدل أن تظهر رموزاً
+  return out.replace(/⟦[^⟧]*⟧/g, '').replace(/⟦\/⟧/g, '');
 }
 
 // HTML من الخانة الذكية → نص (مع علامات)
