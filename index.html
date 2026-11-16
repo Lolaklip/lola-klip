@@ -4042,6 +4042,14 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
   const _rel = _diffDays === 0 ? 'i dag' : (_diffDays === 1 ? 'i morgen' : '');
   const _dateLine = '🗓️ ' + (_rel ? (_rel.charAt(0).toUpperCase() + _rel.slice(1) + ', ') : '') + dayName + ' ' + dateFmt;
   const _dayWord = _rel || 'denne dag';
+  // x100: samme datolinje for en vilkårlig dag (bruges når kunden har aftaler på flere dage)
+  const _dlFor = function(dk) {
+    const pp = dk.split('-');
+    const d = new Date(parseInt(pp[0]), parseInt(pp[1]) - 1, parseInt(pp[2]));
+    const df = Math.round((d - _todayD) / 86400000);
+    const rl = df === 0 ? 'i dag' : (df === 1 ? 'i morgen' : '');
+    return '🗓️ ' + (rl ? (rl.charAt(0).toUpperCase() + rl.slice(1) + ', ') : '') + aftalerDays[d.getDay()] + ' ' + pp[2] + '-' + pp[1] + '-' + pp[0];
+  };
 
   // Dame klip / Herre klip ud fra koden i aftalen (dr/dl = Dame, hr/hl = Herre)
   const _klipType = getAftaleType(val);
@@ -4088,12 +4096,43 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
     'Hvis du er forhindret eller ønsker at ændre dine tider, bedes du venligst ringe til os på 81 93 51 80 senest én time før aftalen. Du kan ikke svare på denne SMS.\n\n' +
     'Mvh. Lola Klip 🌹';
   // n = antal tider i beskeden. 1 = den gamle besked uændret.
+  // x100: booking-SMS → kundens øvrige kommende aftaler på andre dage med i beskeden
+  const _otherDays = _reminder ? [] : aftaleOtherDaysGroups(dateKey, grpKey);
+  const _otherCnt = _otherDays.reduce(function(s, d){ return s + d.items.length; }, 0);
+  const _total = group.length + _otherCnt;
   function buildMsg(n) {
     // x95: overskrift afhænger af fase (booking/påmindelse) og af i dag / i morgen
     const pre = _reminder
       ? ('Husk din tid' + (_rel ? ' ' + _rel : '') + ' ⏰\n')
       : (_rel ? ('Du har booket en tid ' + _rel + ' 📅\n') : '');
     if (n <= 1) return pre + baseMsg;
+    if (_otherCnt > 0) {
+      if (n === _total) {
+        // alle aftaler kendes → antal først, så hver dag med sine tider
+        const days = [{ dk: dateKey, times: group.map(function(g){ return g.time; }) }]
+          .concat(_otherDays.map(function(d){ return { dk: d.dateKey, times: d.items.map(function(g){ return g.time; }) }; }));
+        days.sort(function(a, b){ return a.dk.localeCompare(b.dk); });
+        return pre +
+          'Hej\n' +
+          'Vi glæder os til at se dig til dine aftaler hos os.\n\n' +
+          '📋 Du har i alt ' + n + ' tider hos os:\n\n' +
+          days.map(function(d){
+            return _dlFor(d.dk) + '\n' +
+              (d.times.length === 1
+                ? ('⏰ Kl. ' + d.times[0])
+                : d.times.map(function(t){ return '• Kl. ' + t; }).join('\n'));
+          }).join('\n\n') + '\n\n' +
+          _footerMany;
+      }
+      // tallet er rettet manuelt → kun antal og denne aftale
+      return pre +
+        'Hej\n' +
+        'Vi glæder os til at se dig til dine aftaler hos os.\n\n' +
+        '📋 Du har i alt ' + n + ' tider hos os.\n\n' +
+        _dateLine + '\n' +
+        '⏰ Første tid kl. ' + timeStr + '\n\n' +
+        _footerMany;
+    }
     if (group.length === n) {
       // alle tider kendes → antal først, så dato, så hele listen
       return pre +
@@ -4115,12 +4154,14 @@ function triggerAftaleSMS(val, dateKey, timeStr, colSide) {
   }
   const _sfx = _reminder ? '_sms2' : '_sms';
   const opts = {
-    count: group.length,
+    count: _total,
     build: buildMsg,
     markKeys: group.map(function(g){ return g.key + _sfx; }),
+    markOther: _otherDays.reduce(function(a, d){ return a.concat(d.items.map(function(g){ return { dateKey: d.dateKey, key: g.key + '_sms' }; })); }, []),
+    markOtherN: _total,
     upcoming: custId ? { idNum: String(custId), dateKey: dateKey, dataKey: selfKey } : null
   };
-  msg = buildMsg(group.length);
+  msg = buildMsg(_total);
 
   showAftaleSMSConfirm({ name: name, phone: phone, id: custId }, msg, dateKey, targetKey, phaseLabel, phaseIcon, opts);
 }
@@ -4148,6 +4189,24 @@ function aftaleSameDayGroup(dateKey, grpKey) {
     out.push({ time: m[1], side: m[2] || '', key: k, type: getAftaleType(t) });
   });
   out.sort(aftaleGroupSort);
+  return out;
+}
+
+// x100: kundens øvrige kommende aftaler på ANDRE dage (til booking-SMS)
+function aftaleOtherDaysGroups(dateKey, grpKey) {
+  const data = loadAftalerData();
+  const now = new Date();
+  const pad = function(n){ return String(n).padStart(2,'0'); };
+  const todayKey = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const out = [];
+  Object.keys(data).sort().forEach(function(dk){
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
+    if (dk === dateKey || dk < todayKey) return;
+    let items = aftaleSameDayGroup(dk, grpKey);
+    if (dk === todayKey) items = items.filter(function(g){ return _upMinutes(g.time) >= nowMin; });
+    if (items.length) out.push({ dateKey: dk, items: items });
+  });
   return out;
 }
 
@@ -4218,6 +4277,12 @@ function showAftaleSMSConfirm(c, msg, dateKey, smsKey, phaseLabel, phaseIcon, op
       allData[dateKey][smsKey] = Date.now();
       if (opts && opts.markKeys) {
         opts.markKeys.forEach(function(k) { if (!allData[dateKey][k]) allData[dateKey][k] = Date.now(); });
+      }
+      if (opts && opts.markOther && curN === opts.markOtherN) {
+        opts.markOther.forEach(function(o) {
+          if (!allData[o.dateKey]) allData[o.dateKey] = {};
+          if (!allData[o.dateKey][o.key]) allData[o.dateKey][o.key] = Date.now();
+        });
       }
       saveAftalerData(allData);
       if (typeof renderAftalerSchedule === 'function') renderAftalerSchedule();
